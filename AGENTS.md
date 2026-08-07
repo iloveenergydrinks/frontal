@@ -5,7 +5,7 @@ protocols. You can do all of that autonomously. You cannot launch a token, and
 neither can Nexus — broadcasting requires a human approving one exact plan and
 signing in a wallet Nexus never holds a key for.
 
-Read this before driving `nexus` or the `clinexus` MCP server.
+Read this before driving `nexus` or the `nexus-launch` MCP server.
 
 ## The rule that governs everything
 

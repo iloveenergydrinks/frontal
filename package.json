@@ -1,5 +1,5 @@
 {
-  "name": "clinexus",
+  "name": "nexus-launch",
   "version": "0.1.0",
   "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification, with an MCP server",
   "type": "module",
@@ -18,7 +18,7 @@
   },
   "bin": {
     "nexus": "./dist/cli.js",
-    "clinexus": "./dist/cli.js",
+    "nexus-launch": "./dist/cli.js",
     "nexus-mcp": "./dist/mcp.js"
   },
   "exports": {

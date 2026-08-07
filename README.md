@@ -11,7 +11,7 @@ It prepares a content-addressed launch plan before opening a wallet, rebuilds th
 
 ## Status
 
-This repository is a `0.1.0` release candidate. It publishes as `clinexus`, after the `cli.nexus` domain, and installs the executables `nexus`, `clinexus`, and `nexus-mcp`. Both `nexus-cli` and `cli-nexus` are occupied on npm by unrelated packages.
+This repository is a `0.1.0` release candidate. It publishes as `nexus-launch` and installs the executables `nexus`, `nexus-launch`, and `nexus-mcp`. The names `nexus`, `nexus-cli`, and `cli-nexus` are all taken on npm, and npm rejects `clinexus` as too similar to `cli-nexus` because it compares names with punctuation removed.
 
 Both adapters pass read-only mainnet simulation and full fork execution/verification. No production token has been broadcast.
 
@@ -22,13 +22,13 @@ The Pons adapter targets the protocol's documented active deployment (factory `0
 Requirements: Node.js `20.19` or newer.
 
 ```bash
-npm install clinexus viem
+npm install nexus-launch viem
 ```
 
 Run the CLI without installing globally:
 
 ```bash
-npx clinexus --json adapters
+npx nexus-launch --json adapters
 ```
 
 No install script, telemetry, wallet connection, or network request runs when the SDK is imported.
@@ -177,9 +177,9 @@ Nexus ships an MCP server so an agent can drive the same workflow natively. Regi
 ```json
 {
   "mcpServers": {
-    "clinexus": {
+    "nexus-launch": {
       "command": "npx",
-      "args": ["-y", "-p", "clinexus", "nexus-mcp"],
+      "args": ["-y", "-p", "nexus-launch", "nexus-mcp"],
       "env": {
         "NEXUS_BNB_RPC_URL": "https://your-bnb-rpc.example",
         "NEXUS_RH_RPC_URL": "https://your-robinhood-rpc.example"
@@ -195,13 +195,13 @@ It exposes `list_adapters`, `prepare_launch`, `simulate_launch`, `get_execution_
 
 ## SDK
 
-The core SDK uses caller-supplied `viem` clients and is browser-compatible. Filesystem metadata upload is isolated in `clinexus/flap-metadata`; the WalletConnect dependency is isolated in the CLI.
+The core SDK uses caller-supplied `viem` clients and is browser-compatible. Filesystem metadata upload is isolated in `nexus-launch/flap-metadata`; the WalletConnect dependency is isolated in the CLI.
 
 ```ts
 import { createPublicClient, http } from "viem";
 import { bsc } from "viem/chains";
-import { flapStandard } from "clinexus/flap";
-import { prepareLaunch, simulateLaunch } from "clinexus";
+import { flapStandard } from "nexus-launch/flap";
+import { prepareLaunch, simulateLaunch } from "nexus-launch";
 
 const publicClient = createPublicClient({ chain: bsc, transport: http(process.env.BNB_RPC_URL) });
 const adapter = flapStandard();
@@ -227,7 +227,7 @@ The unsigned transaction is always available as `plan.transaction`. Applications
 Node-only Flap metadata upload:
 
 ```ts
-import { uploadFlapMetadata } from "clinexus/flap-metadata";
+import { uploadFlapMetadata } from "nexus-launch/flap-metadata";
 ```
 
 ## Protocol behavior
