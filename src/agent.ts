@@ -64,6 +64,23 @@ Never put a private key, seed phrase, or RPC credential into a command, a file, 
 
 Write in plain sentences. Lead with what matters. Explain the trade-offs a launch actually carries rather than cheerleading it.`;
 
+/** The cli.nexus mark — the favicon's diamond and N, in half-block characters. */
+const MARK = [
+  "             \u2584\u2588\u2588\u2584",
+  "           \u2584\u2588\u2580  \u2580\u2588\u2584",
+  "         \u2584\u2588\u2580      \u2580\u2588\u2584",
+  "       \u2584\u2588\u2580          \u2580\u2588\u2584",
+  "     \u2584\u2588\u2580 \u2588\u2588\u2588\u2584     \u2584\u2588\u2588 \u2580\u2588\u2584",
+  "   \u2584\u2588\u2580   \u2588\u2588\u2588\u2588\u2588\u2584   \u2588\u2588\u2588   \u2580\u2588\u2584",
+  "  \u2588\u2588     \u2588\u2588\u2588\u2580\u2580\u2588\u2588\u2584\u2584\u2588\u2588\u2588     \u2588\u2588",
+  "   \u2580\u2588\u2584   \u2588\u2588\u2588   \u2580\u2588\u2588\u2588\u2588\u2588   \u2584\u2588\u2580",
+  "     \u2580\u2588\u2584 \u2588\u2588\u2580     \u2580\u2588\u2588\u2588 \u2584\u2588\u2580",
+  "       \u2580\u2588\u2584          \u2584\u2588\u2580",
+  "         \u2580\u2588\u2584      \u2584\u2588\u2580",
+  "           \u2580\u2588\u2584  \u2584\u2588\u2580",
+  "             \u2580\u2588\u2588\u2580",
+].join("\n");
+
 interface TokenInput {
   description?: string | undefined;
   discord?: string | undefined;
@@ -308,6 +325,8 @@ export async function startChat(): Promise<void> {
   const messages: Anthropic.Beta.BetaMessageParam[] = [];
   const io = createInterface({ input: process.stdin, output: process.stdout });
 
+  // Only on a real terminal — piped output stays machine-readable.
+  if (process.stdout.isTTY === true) process.stdout.write(`${MARK}\n\n`);
   process.stdout.write(
     "Nexus — token launches on BNB Smart Chain and Robinhood Chain.\n" +
       "I prepare and simulate a launch; you approve the plan and sign in your own wallet.\n" +
