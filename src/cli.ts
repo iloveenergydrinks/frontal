@@ -26,6 +26,7 @@ import { uploadFlapMetadata } from "./flap-metadata.js";
 import { flapStandard, type FlapStandardLaunchOptions } from "./flap.js";
 import { prepareLaunch, sendLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
 import { startLocalLauncher } from "./local-launcher.js";
+import { encodePlanUrl } from "./plan-url.js";
 import { pons, type PonsLaunchOptions } from "./pons.js";
 import { stringifyJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
@@ -432,6 +433,30 @@ launch
       failure(error);
     } finally {
       await provider?.disconnect().catch(() => undefined);
+    }
+  });
+
+launch
+  .command("link")
+  .description("encode a saved plan into a signing URL; the plan rides in the fragment and never reaches a server")
+  .requiredOption("--plan <path>", "saved plan JSON")
+  .requiredOption("--base-url <url>", "https base URL of the signing page")
+  .action(async function (this: Command, options: PlanFileOptions & { baseUrl: string }) {
+    try {
+      const plan = await readPlan(options.plan);
+      const url = await encodePlanUrl(plan, options.baseUrl);
+      success(
+        {
+          url,
+          planId: plan.id,
+          chainId: plan.chainId,
+          account: plan.account,
+          note: "The signing page must display this exact plan ID. Compare it before approving anything.",
+        },
+        this,
+      );
+    } catch (error) {
+      failure(error);
     }
   });
 

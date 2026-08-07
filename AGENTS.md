@@ -72,10 +72,14 @@ returns the exact command for the human to run.
    warning about an unprotected buy, a permanent lock, or an upgradeable
    protocol.
 
-7. **Hand off execution.** Give the human the command from
-   `get_execution_instructions` and stop. `serve` is for a desktop browser
-   wallet; `execute` opens a WalletConnect QR for a phone. They approve the plan
-   ID and sign in their own wallet.
+7. **Hand off execution.** Give the human what `get_execution_instructions`
+   returns and stop. `serve` is for a desktop browser wallet and `execute` opens
+   a WalletConnect QR for a phone; both assume they are at the machine holding
+   the plan. If the response includes `signingUrl`, the operator has configured
+   a hosted signing page and that link works for someone with no local checkout.
+   When you give them a link, tell them the plan ID it must display — a page
+   showing a different ID means the link was altered, and they should not sign.
+   They approve the plan ID and sign in their own wallet.
 
 8. **`verify_launch`** once they give you a transaction hash. Report what it
    returns. Do not describe a launch as successful before this passes.

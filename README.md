@@ -162,7 +162,21 @@ Nexus never retries after a possible broadcast. If submission or verification be
 
 Receipt verification is pinned to the canonical receipt block. Some public BNB RPCs prune historical contract state; when that is the only unavailable check, Flap verification additionally pins a current block, verifies the exact immutable minimal-proxy runtime and token metadata there, rechecks that block hash, and returns `stateVerification.mode: "current-fallback"`. Use an archive-capable RPC when receipt-block state verification is required.
 
-### 6. Verify an existing transaction
+### 6. Hand a plan to a browser that has no checkout
+
+`serve` only works when the person signing is at the machine that prepared the plan. When they are not — a hosted chat, a phone, a teammate — encode the plan into a link instead:
+
+```bash
+nexus --json launch link \
+  --plan ./pons-plan.json \
+  --base-url https://cli.nexus/launch
+```
+
+The plan rides in the URL fragment, so it is never sent to that page's server and no host can show one transaction while the wallet signs another. A tampered link fails to decode, because the plan's bytes are checked against its own content hash before anything renders.
+
+The signing page must still display the decoded plan ID so the human can compare it with the one they approved, and must still revalidate against live chain state before opening a wallet. Plans compress to roughly 3 KB of URL.
+
+### 7. Verify an existing transaction
 
 ```bash
 nexus --json launch verify \

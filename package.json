@@ -45,6 +45,10 @@
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
+    },
+    "./plan-url": {
+      "types": "./dist/plan-url.d.ts",
+      "import": "./dist/plan-url.js"
     }
   },
   "files": [

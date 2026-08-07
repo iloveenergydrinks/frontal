@@ -18,6 +18,7 @@ import { toNexusError } from "./errors.js";
 import { uploadFlapMetadata } from "./flap-metadata.js";
 import { flapStandard } from "./flap.js";
 import { prepareLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
+import { encodePlanUrl } from "./plan-url.js";
 import { pons } from "./pons.js";
 import { canonicalJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
@@ -110,15 +111,34 @@ function planDigest(plan: LaunchPlan): Record<string, unknown> {
   };
 }
 
-function executionInstructions(plan: LaunchPlan, planPath: string): Record<string, unknown> {
-  return {
+async function executionInstructions(
+  plan: LaunchPlan,
+  planPath: string,
+): Promise<Record<string, unknown>> {
+  const instructions: Record<string, unknown> = {
     approvalRequired: true,
     planId: plan.id,
-    note: "Nexus cannot broadcast. A human runs one of these commands and signs in their own wallet.",
+    note: "Nexus cannot broadcast. A human approves this exact plan ID and signs in their own wallet.",
     desktopBrowserWallet: `nexus launch serve --plan ${planPath} --approve ${plan.id}`,
     mobileOrQrWallet: `nexus launch execute --plan ${planPath} --approve ${plan.id}`,
     afterBroadcast: `nexus launch verify --plan ${planPath} --tx <transaction-hash>`,
   };
+  // A hosted signing page is the only handoff that works when the human has no
+  // local checkout, so offer the link when an operator has configured one. The
+  // plan travels in the URL fragment and never reaches that page's server.
+  const signingPage = process.env.NEXUS_SIGNING_URL;
+  if (signingPage !== undefined && signingPage.trim() !== "") {
+    try {
+      instructions.signingUrl = await encodePlanUrl(plan, signingPage.trim());
+      instructions.signingUrlNote =
+        "Tell the human to confirm the page shows plan ID " +
+        plan.id +
+        " before approving. A different ID means the link was altered.";
+    } catch (error) {
+      instructions.signingUrlError = toNexusError(error).message;
+    }
+  }
+  return instructions;
 }
 
 const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
@@ -231,7 +251,7 @@ server.registerTool(
         planId: plan.id,
         summary: plan.summary,
         warnings: plan.warnings,
-        execution: executionInstructions(plan, input.plan),
+        execution: await executionInstructions(plan, input.plan),
       });
     } catch (error) {
       return fail(error);
@@ -250,7 +270,7 @@ server.registerTool(
   async (input) => {
     try {
       const plan = await readPlan(input.plan);
-      return ok(executionInstructions(plan, input.plan));
+      return ok(await executionInstructions(plan, input.plan));
     } catch (error) {
       return fail(error);
     }
