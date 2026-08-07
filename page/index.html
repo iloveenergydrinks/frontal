@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <title>Review and sign a Nexus launch</title>
+    <style>
+      :root { color-scheme: light dark; --line: #8883; --warn: #b45309; --err: #b91c1c; --ok: #15803d; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 2rem 1rem 4rem; font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      main { max-width: 46rem; margin: 0 auto; }
+      h1 { font-size: 1.35rem; margin: 0 0 .35rem; }
+      h2 { font-size: 1rem; margin: 2rem 0 .6rem; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
+      .lede { margin: 0 0 1.5rem; opacity: .8; }
+      .mono, code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+      .plan-id { display: block; padding: .75rem; border: 2px solid var(--line); border-radius: .4rem; word-break: break-all; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9rem; }
+      .row { display: flex; justify-content: space-between; gap: 1.5rem; padding: .4rem 0; border-bottom: 1px solid var(--line); }
+      .row-label { opacity: .7; flex: 0 0 auto; }
+      .row-value { text-align: right; word-break: break-all; }
+      .status { margin: 1.25rem 0; padding: .75rem 1rem; border-left: 3px solid var(--line); border-radius: .2rem; background: #8881; }
+      .status-error { border-color: var(--err); }
+      .status-ok { border-color: var(--ok); }
+      .status-working { border-color: var(--warn); }
+      ul { padding-left: 1.1rem; }
+      li { margin: .4rem 0; }
+      button { font: inherit; padding: .6rem 1.1rem; border-radius: .4rem; border: 1px solid var(--line); background: #8881; cursor: pointer; }
+      button[disabled] { opacity: .45; cursor: not-allowed; }
+      .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+      pre { overflow-x: auto; padding: .75rem; border: 1px solid var(--line); border-radius: .4rem; background: #8881; }
+      .note { font-size: .9rem; opacity: .75; }
+      #broadcast-warning { border-left-color: var(--err); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Review and sign a Nexus launch</h1>
+      <p class="lede">
+        This page runs entirely in your browser. The plan travels in the URL fragment, which is never sent to the
+        server hosting this page, and is checked against its own content hash before anything is shown.
+      </p>
+
+      <div id="status" class="status status-info">Loading…</div>
+      <div id="broadcast-warning" class="status" hidden></div>
+
+      <section id="plan-section" hidden>
+        <h2>Plan ID</h2>
+        <p class="note">This must match the plan ID you were asked to approve. If it differs, the link was altered — do not sign.</p>
+        <code id="plan-id" class="plan-id"></code>
+
+        <h2>Launch</h2>
+        <div id="summary"></div>
+        <p id="pricing" class="note"></p>
+
+        <h2>Cost</h2>
+        <div id="costs"></div>
+
+        <h2>Warnings</h2>
+        <ul id="warnings"></ul>
+
+        <h2>Exact calldata</h2>
+        <pre><code id="calldata" class="mono"></code></pre>
+
+        <div class="actions">
+          <button id="revalidate" type="button" disabled>Revalidate against live chain state</button>
+          <button id="connect" type="button" disabled>Connect wallet and sign</button>
+        </div>
+        <p class="note">
+          Signing is disabled until the plan is rebuilt from live protocol state and simulated. A valid content hash
+          proves the plan is internally consistent, not that the protocol still matches it.
+        </p>
+      </section>
+
+      <section id="simulation-section" hidden>
+        <h2>Live revalidation</h2>
+        <div id="simulation"></div>
+      </section>
+
+      <section id="result-section" hidden>
+        <h2>Transaction</h2>
+        <code id="tx-hash" class="plan-id"></code>
+        <div id="verified"></div>
+      </section>
+
+      <h2>What this page cannot do</h2>
+      <p class="note">
+        It never receives a private key or seed phrase, never retries after a possible broadcast, and cannot alter the
+        transaction it shows you. Token launches are permanent and can lose all value. Nexus is unaudited, and so are
+        the protocols it launches through.
+      </p>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -61,14 +61,15 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:mcp && npm run test:package && npm run pack:check",
+    "build:page": "node scripts/build-page.mjs",
+    "check": "npm run typecheck && npm test && npm run build && npm run build:page && npm run test:mcp && npm run test:package && npm run pack:check",
     "pack:check": "npm pack --dry-run",
     "test": "vitest run",
     "test:fork": "npm run build && node scripts/fork-e2e.mjs",
+    "test:mcp": "node scripts/mcp-smoke.mjs",
     "test:package": "node scripts/package-smoke.mjs",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "test:mcp": "node scripts/mcp-smoke.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
     "viem": "^2.55.11"
@@ -83,6 +84,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/qrcode-terminal": "^0.12.2",
+    "esbuild": "^0.28.1",
     "typescript": "^5.9.3",
     "viem": "^2.55.11",
     "vitest": "^4.1.10"
