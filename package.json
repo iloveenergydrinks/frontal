@@ -64,6 +64,7 @@
     "build:page": "node scripts/build-page.mjs",
     "check": "npm run typecheck && npm test && npm run build && npm run build:page && npm run test:mcp && npm run test:package && npm run pack:check",
     "pack:check": "npm pack --dry-run",
+    "start:page": "node page/server.mjs",
     "test": "vitest run",
     "test:fork": "npm run build && node scripts/fork-e2e.mjs",
     "test:mcp": "node scripts/mcp-smoke.mjs",
