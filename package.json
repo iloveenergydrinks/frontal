@@ -1,6 +1,6 @@
 {
   "name": "nexus-launch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification, with an MCP server",
   "type": "module",
   "license": "MIT",
