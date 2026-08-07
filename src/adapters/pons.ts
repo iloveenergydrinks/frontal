@@ -76,6 +76,7 @@ const v3FactoryAbi = parseAbi([
 ]);
 
 const positionManagerAbi = parseAbi(["function ownerOf(uint256 tokenId) view returns (address owner)"]);
+const lockerAbi = parseAbi(["function feeRedirects(address token) view returns (address recipient)"]);
 
 const MAX_SALT_ATTEMPTS = 64;
 
@@ -601,10 +602,12 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
         blockNumber: bigint,
       ): Promise<{
         description: string;
+        feeRedirect: Address;
         logo: string;
         name: string;
         pool: Address;
         positionOwner: Address;
+        socials: Required<NormalizedTokenMetadata["socials"]>;
         supply: bigint;
         symbol: string;
       }> => {
@@ -635,11 +638,12 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
         }
         await runtimeCodeHash(publicClient, expectedToken, blockNumber);
         const token = { address: expectedToken, abi: ponsTokenAbi, blockNumber } as const;
-        const [name, symbol, logo, description, supply, pool, positionOwner] = await Promise.all([
+        const [name, symbol, logo, description, socials, supply, pool, positionOwner, feeRedirect] = await Promise.all([
           publicClient.readContract({ ...token, functionName: "name" }),
           publicClient.readContract({ ...token, functionName: "symbol" }),
           publicClient.readContract({ ...token, functionName: "logo" }),
           publicClient.readContract({ ...token, functionName: "description" }),
+          publicClient.readContract({ ...token, functionName: "socials" }),
           publicClient.readContract({ ...token, functionName: "totalSupply" }),
           publicClient.readContract({ ...token, functionName: "liquidityPool" }),
           publicClient.readContract({
@@ -649,13 +653,28 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
             args: [launched.positionId],
             blockNumber,
           }),
+          publicClient.readContract({
+            address: PONS_LOCKER,
+            abi: lockerAbi,
+            functionName: "feeRedirects",
+            args: [expectedToken],
+            blockNumber,
+          }),
         ]);
         return {
           description,
+          feeRedirect: getAddress(feeRedirect),
           logo,
           name,
           pool: getAddress(pool),
           positionOwner: getAddress(positionOwner),
+          socials: {
+            twitter: socials[0],
+            telegram: socials[1],
+            discord: socials[2],
+            website: socials[3],
+            farcaster: socials[4],
+          },
           supply,
           symbol,
         };
@@ -693,8 +712,10 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
         tokenState.symbol !== plan.request.token.symbol ||
         tokenState.logo !== plan.request.token.image ||
         tokenState.description !== plan.request.token.description ||
+        canonicalJson(tokenState.socials) !== canonicalJson(plan.request.token.socials) ||
         tokenState.supply !== BigInt(String(snapshotConfig.supply)) ||
-        tokenState.pool !== getAddress(launched.pool)
+        tokenState.pool !== getAddress(launched.pool) ||
+        tokenState.feeRedirect !== getAddress(String(plan.request.launch.feeWallet))
       ) {
         throw new NexusError("LAUNCH_VERIFICATION_FAILED", "Pons token state does not match the plan.", {
           broadcast: true,

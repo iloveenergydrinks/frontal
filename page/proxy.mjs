@@ -17,27 +17,46 @@ const UPSTREAM = "https://api.anthropic.com";
 /** Only the models the agent actually runs on, so nobody can bill a fleet through it. */
 const MODELS = new Set(["claude-opus-5", "claude-opus-4-8"]);
 
-const MAX_OUTPUT_TOKENS = 64_000;
-const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_OUTPUT_TOKENS = 8_192;
+const MAX_BODY_BYTES = 512 * 1024;
+const MAX_MESSAGES = 100;
+const MAX_BUCKETS = 10_000;
+const UPSTREAM_TIMEOUT_MS = 120_000;
+
+const NEXUS_TOOLS = new Set([
+  "get_signing_link",
+  "list_adapters",
+  "prepare_launch",
+  "simulate_launch",
+  "upload_flap_metadata",
+  "verify_launch",
+]);
 
 /** Per-address budget: a burst for one conversation, refilled slowly. */
-const RATE_CAPACITY = 40;
-const RATE_REFILL_PER_MS = 40 / (60 * 60 * 1000);
+const RATE_CAPACITY = 20;
+const RATE_REFILL_PER_MS = 20 / (60 * 60 * 1000);
+const GLOBAL_RATE_CAPACITY = 120;
+const GLOBAL_RATE_REFILL_PER_MS = 120 / (60 * 60 * 1000);
 
 const buckets = new Map();
+const globalBucket = { tokens: GLOBAL_RATE_CAPACITY, at: Date.now() };
+
+function take(bucket, capacity, refillPerMs, now) {
+  bucket.tokens = Math.min(capacity, bucket.tokens + (now - bucket.at) * refillPerMs);
+  bucket.at = now;
+  if (bucket.tokens < 1) return false;
+  bucket.tokens -= 1;
+  return true;
+}
 
 function allowed(address) {
   const now = Date.now();
+  if (!take(globalBucket, GLOBAL_RATE_CAPACITY, GLOBAL_RATE_REFILL_PER_MS, now)) return false;
+  if (!buckets.has(address) && buckets.size >= MAX_BUCKETS) return false;
   const bucket = buckets.get(address) ?? { tokens: RATE_CAPACITY, at: now };
-  bucket.tokens = Math.min(RATE_CAPACITY, bucket.tokens + (now - bucket.at) * RATE_REFILL_PER_MS);
-  bucket.at = now;
-  if (bucket.tokens < 1) {
-    buckets.set(address, bucket);
-    return false;
-  }
-  bucket.tokens -= 1;
+  const permitted = take(bucket, RATE_CAPACITY, RATE_REFILL_PER_MS, now);
   buckets.set(address, bucket);
-  return true;
+  return permitted;
 }
 
 // Bound the table so a spray of addresses cannot grow it without limit.
@@ -48,12 +67,49 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000).unref();
 
-function client(request) {
+export function clientAddress(request) {
   const forwarded = request.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded.length > 0) {
-    return forwarded.split(",")[0].trim();
+    // Reverse proxies append their observed peer to the right. The leftmost
+    // value is user-controlled on many deployments and must not identify a
+    // rate-limit bucket.
+    return forwarded.split(",").at(-1).trim();
   }
   return request.socket.remoteAddress ?? "unknown";
+}
+
+export function validateRelayBody(body) {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return "Request body must be an object.";
+  }
+  if (!MODELS.has(body.model)) return "This host relays only the Nexus agent models.";
+  if (!Number.isInteger(body.max_tokens) || body.max_tokens <= 0) {
+    return "max_tokens must be a positive integer.";
+  }
+  if (typeof body.system !== "string" || !body.system.startsWith("You are Nexus, a terminal agent")) {
+    return "This host relays only the Nexus agent system prompt.";
+  }
+  if (!Array.isArray(body.messages) || body.messages.length === 0 || body.messages.length > MAX_MESSAGES) {
+    return `messages must contain between 1 and ${MAX_MESSAGES} entries.`;
+  }
+  if (body.messages.some((message) =>
+    typeof message !== "object" || message === null || !["assistant", "user"].includes(message.role))) {
+    return "messages contains an invalid role.";
+  }
+  if (!Array.isArray(body.tools) || body.tools.length !== NEXUS_TOOLS.size) {
+    return "This host requires the exact Nexus tool set.";
+  }
+  const names = new Set(body.tools.map((tool) =>
+    typeof tool === "object" && tool !== null ? tool.name : undefined));
+  if (names.size !== NEXUS_TOOLS.size || [...NEXUS_TOOLS].some((name) => !names.has(name))) {
+    return "This host requires the exact Nexus tool set.";
+  }
+  if (body.fallbacks !== undefined &&
+    (!Array.isArray(body.fallbacks) || body.fallbacks.some((fallback) =>
+      typeof fallback !== "object" || fallback === null || !MODELS.has(fallback.model)))) {
+    return "This host relays only the Nexus agent fallback models.";
+  }
+  return undefined;
 }
 
 function refuse(response, status, message) {
@@ -86,7 +142,7 @@ export async function relay(request, response, pathname) {
     response.end();
     return true;
   }
-  if (!allowed(client(request))) {
+  if (!allowed(clientAddress(request))) {
     response.writeHead(429, { "content-type": "application/json; charset=utf-8", "retry-after": "300" });
     response.end(
       JSON.stringify({
@@ -110,13 +166,12 @@ export async function relay(request, response, pathname) {
     refuse(response, 400, "Request body is not valid JSON.");
     return true;
   }
-  if (typeof body !== "object" || body === null || !MODELS.has(body.model)) {
-    refuse(response, 400, "This host relays only the Nexus agent models.");
+  const invalid = validateRelayBody(body);
+  if (invalid !== undefined) {
+    refuse(response, 400, invalid);
     return true;
   }
-  if (typeof body.max_tokens === "number" && body.max_tokens > MAX_OUTPUT_TOKENS) {
-    body.max_tokens = MAX_OUTPUT_TOKENS;
-  }
+  body.max_tokens = Math.min(body.max_tokens, MAX_OUTPUT_TOKENS);
 
   // Forward only what the API needs. The caller's own auth headers are dropped
   // rather than passed through, so this host's key is the only one in play.
@@ -134,6 +189,7 @@ export async function relay(request, response, pathname) {
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     });
   } catch {
     refuse(response, 502, "The agent upstream is unreachable.");
