@@ -1,0 +1,78 @@
+{
+  "name": "nexus-launch",
+  "version": "0.1.0",
+  "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://nexus.cli",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iloveenergydrinks/frontal.git"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20.19"
+  },
+  "bin": {
+    "nexus": "./dist/cli.js",
+    "nexus-cli": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./chains": {
+      "types": "./dist/chains.d.ts",
+      "import": "./dist/chains.js"
+    },
+    "./flap": {
+      "types": "./dist/flap.d.ts",
+      "import": "./dist/flap.js"
+    },
+    "./flap-metadata": {
+      "types": "./dist/flap-metadata.d.ts",
+      "import": "./dist/flap-metadata.js"
+    },
+    "./pons": {
+      "types": "./dist/pons.d.ts",
+      "import": "./dist/pons.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "README.md",
+    "LICENSE",
+    "PRODUCT_VALIDATION.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:package && npm run pack:check",
+    "pack:check": "npm pack --dry-run",
+    "test": "vitest run",
+    "test:fork": "npm run build && node scripts/fork-e2e.mjs",
+    "test:package": "node scripts/package-smoke.mjs",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "viem": "^2.55.11"
+  },
+  "dependencies": {
+    "@walletconnect/relay-auth": "1.1.0",
+    "@walletconnect/universal-provider": "^2.23.10",
+    "commander": "^15.0.0",
+    "qrcode-terminal": "^0.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "typescript": "^5.9.3",
+    "viem": "^2.55.11",
+    "vitest": "^4.1.10"
+  }
+}
