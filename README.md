@@ -20,11 +20,10 @@ The Pons adapter targets the protocol's documented active deployment (factory `0
 ## Talk to it
 
 ```bash
-export ANTHROPIC_API_KEY='sk-ant-...'
 npx nexus-launch
 ```
 
-That starts a conversational agent in your terminal. It asks which chain, collects the token details, prepares and simulates a plan against live protocol state, shows you the cost and every warning, and hands you a signing link. Then it stops: it has no tool that broadcasts, so you approve the exact plan ID and sign in your own wallet.
+That starts a conversational agent in your terminal, with nothing to configure — model traffic relays through `cli.nexus`, which holds the key. Set `ANTHROPIC_API_KEY` and it talks to Anthropic directly on your own account instead, which is the better choice for heavy use since the shared relay is rate limited per address. It asks which chain, collects the token details, prepares and simulates a plan against live protocol state, shows you the cost and every warning, and hands you a signing link. Then it stops: it has no tool that broadcasts, so you approve the exact plan ID and sign in your own wallet.
 
 `nexus chat` does the same thing explicitly. Every command below still works for scripting, and the MCP server exposes the same tools to any other agent.
 

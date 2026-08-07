@@ -1,6 +1,6 @@
 {
   "name": "nexus-launch",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Conversational agent, TypeScript SDK, and MCP server for guarded EVM token launches",
   "type": "module",
   "license": "MIT",
