@@ -440,7 +440,7 @@ launch
   .command("link")
   .description("encode a saved plan into a signing URL; the plan rides in the fragment and never reaches a server")
   .requiredOption("--plan <path>", "saved plan JSON")
-  .requiredOption("--base-url <url>", "https base URL of the signing page")
+  .option("--base-url <url>", "https base URL of the signing page", "https://cli.nexus/")
   .action(async function (this: Command, options: PlanFileOptions & { baseUrl: string }) {
     try {
       const plan = await readPlan(options.plan);

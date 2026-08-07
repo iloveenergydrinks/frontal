@@ -35,7 +35,10 @@ import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
  */
 
 const SERVER_NAME = "nexus-launch";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.1.2";
+
+/** Where an operator hosts the signing page. Override with NEXUS_SIGNING_URL. */
+const DEFAULT_SIGNING_URL = "https://cli.nexus/";
 
 interface ToolResult {
   [key: string]: unknown;
@@ -126,8 +129,8 @@ async function executionInstructions(
   // A hosted signing page is the only handoff that works when the human has no
   // local checkout, so offer the link when an operator has configured one. The
   // plan travels in the URL fragment and never reaches that page's server.
-  const signingPage = process.env.NEXUS_SIGNING_URL;
-  if (signingPage !== undefined && signingPage.trim() !== "") {
+  const signingPage = process.env.NEXUS_SIGNING_URL ?? DEFAULT_SIGNING_URL;
+  if (signingPage.trim() !== "") {
     try {
       instructions.signingUrl = await encodePlanUrl(plan, signingPage.trim());
       instructions.signingUrlNote =
