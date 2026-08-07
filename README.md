@@ -280,6 +280,23 @@ The release check performs strict TypeScript validation, unit tests, ESM build, 
 
 See [PRODUCT_VALIDATION.md](./PRODUCT_VALIDATION.md) for the feature and UX acceptance document. The launch plan schema is published at [schemas/launch-plan.schema.json](./schemas/launch-plan.schema.json).
 
+## Releasing
+
+Releases are published by `.github/workflows/release.yml` on a `v*` tag, never from a laptop, so every version carries npm provenance. The workflow re-runs the full check and refuses to publish if the tag does not match the version in `package.json`.
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+Authentication has two paths and the workflow selects one by itself:
+
+- **Trusted publishing.** npm authenticates the workflow over OIDC, no secret exists, and provenance is automatic. Configure it on npmjs.com under the package's Settings → Trusted Publisher, pointing at this repository and `release.yml`. If you also set an environment there, it must be `npm`.
+- **A token.** Trusted publishing cannot be registered until a package exists on npm, so the first release needs an `NPM_TOKEN` secret in the `npm` environment. A granular token cannot select a package that does not exist yet, so scope it to all packages, or use a classic Automation token; either way it must bypass two-factor authentication to work unattended.
+
+Moving from the second to the first is deleting the `NPM_TOKEN` secret. The workflow needs no edit.
+
+The `npm` environment is also an approval gate. Publishing claims a package name permanently and cannot be undone after 24 hours, so add required reviewers to it if a release should need a human click.
+
 ## License
 
 MIT
