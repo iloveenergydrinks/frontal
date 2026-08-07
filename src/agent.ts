@@ -64,22 +64,79 @@ Never put a private key, seed phrase, or RPC credential into a command, a file, 
 
 Write in plain sentences. Lead with what matters. Explain the trade-offs a launch actually carries rather than cheerleading it.`;
 
-/** The cli.nexus mark — the favicon's diamond and N, in half-block characters. */
-const MARK = [
-  "             \u2584\u2588\u2588\u2584",
-  "           \u2584\u2588\u2580  \u2580\u2588\u2584",
-  "         \u2584\u2588\u2580      \u2580\u2588\u2584",
-  "       \u2584\u2588\u2580          \u2580\u2588\u2584",
-  "     \u2584\u2588\u2580 \u2588\u2588\u2588\u2584     \u2584\u2588\u2588 \u2580\u2588\u2584",
-  "   \u2584\u2588\u2580   \u2588\u2588\u2588\u2588\u2588\u2584   \u2588\u2588\u2588   \u2580\u2588\u2584",
-  "  \u2588\u2588     \u2588\u2588\u2588\u2580\u2580\u2588\u2588\u2584\u2584\u2588\u2588\u2588     \u2588\u2588",
-  "   \u2580\u2588\u2584   \u2588\u2588\u2588   \u2580\u2588\u2588\u2588\u2588\u2588   \u2584\u2588\u2580",
-  "     \u2580\u2588\u2584 \u2588\u2588\u2580     \u2580\u2588\u2588\u2588 \u2584\u2588\u2580",
-  "       \u2580\u2588\u2584          \u2584\u2588\u2580",
-  "         \u2580\u2588\u2584      \u2584\u2588\u2580",
-  "           \u2580\u2588\u2584  \u2584\u2588\u2580",
-  "             \u2580\u2588\u2588\u2580",
-].join("\n");
+/**
+ * The Robinhood Chain agent mascot from cli.nexus — the lime star.
+ *
+ * Stored as the site's own pixel grid rather than pre-rendered escape codes, so
+ * the terminal can drop to monochrome when colour is unwelcome. Index 0 is
+ * transparent; the rest index PALETTE.
+ */
+const PALETTE = ["#ccff00", "#96c000", "#233300", "#0d0d0d", "#f6f6f2"] as const;
+
+const MASCOT_ROWS = [
+  "00000000033000000000",
+  "00000000311300000000",
+  "00030000311300003000",
+  "00313303111130331300",
+  "00031131111113113000",
+  "00031111111111113000",
+  "00003111111111130000",
+  "00031541111154113000",
+  "03311441111144111330",
+  "31111441111144111123",
+  "32211111111111112223",
+  "03321111441111122330",
+  "00032111111111223000",
+  "00003111111111130000",
+  "00031221111122123000",
+  "00032232111223223000",
+  "00323303212230332300",
+  "00030000312300003000",
+  "00000000322300000000",
+  "00000000033000000000",
+];
+
+function ansi(hex: string, background: boolean): string {
+  const r = Number.parseInt(hex.slice(1, 3), 16);
+  const g = Number.parseInt(hex.slice(3, 5), 16);
+  const b = Number.parseInt(hex.slice(5, 7), 16);
+  return `\u001B[${background ? 48 : 38};2;${r};${g};${b}m`;
+}
+
+function mascot(coloured: boolean): string {
+  const at = (row: number, column: number): string | undefined => {
+    const index = MASCOT_ROWS[row]?.charCodeAt(column);
+    if (index === undefined || index === 48) return undefined; // "0" is transparent
+    const colour = PALETTE[index - 49];
+    // Without colour the eyes and mouth would fill in solid like the body and
+    // the face would disappear, so punch them out as gaps instead.
+    if (!coloured && colour === "#0d0d0d") return undefined;
+    return colour;
+  };
+  const lines: string[] = [];
+  for (let row = 0; row < MASCOT_ROWS.length; row += 2) {
+    let line = "";
+    for (let column = 0; column < (MASCOT_ROWS[0]?.length ?? 0); column += 1) {
+      const top = at(row, column);
+      const bottom = at(row + 1, column);
+      if (!coloured) {
+        line += top && bottom ? "\u2588" : top ? "\u2580" : bottom ? "\u2584" : " ";
+        continue;
+      }
+      if (top !== undefined && bottom !== undefined) {
+        line += `${ansi(top, false)}${ansi(bottom, true)}\u2580\u001B[0m`;
+      } else if (top !== undefined) {
+        line += `${ansi(top, false)}\u2580\u001B[0m`;
+      } else if (bottom !== undefined) {
+        line += `${ansi(bottom, false)}\u2584\u001B[0m`;
+      } else {
+        line += " ";
+      }
+    }
+    lines.push(line.replace(/\s+$/u, ""));
+  }
+  return lines.join("\n");
+}
 
 interface TokenInput {
   description?: string | undefined;
@@ -326,7 +383,10 @@ export async function startChat(): Promise<void> {
   const io = createInterface({ input: process.stdin, output: process.stdout });
 
   // Only on a real terminal — piped output stays machine-readable.
-  if (process.stdout.isTTY === true) process.stdout.write(`${MARK}\n\n`);
+  if (process.stdout.isTTY === true) {
+    const colour = (process.env.NO_COLOR ?? "") === "" && process.env.TERM !== "dumb";
+    process.stdout.write(`${mascot(colour)}\n\n`);
+  }
   process.stdout.write(
     "Nexus — token launches on BNB Smart Chain and Robinhood Chain.\n" +
       "I prepare and simulate a launch; you approve the plan and sign in your own wallet.\n" +
