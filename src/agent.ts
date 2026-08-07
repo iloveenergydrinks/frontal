@@ -342,12 +342,22 @@ export async function startChat(): Promise<void> {
           output_config: { effort: "high" },
         });
 
+        // The model speaks once before a tool call and again after it. Without a
+        // break the two run together mid-sentence.
+        let spoke = false;
+        let pending = false;
         for await (const stream of runner) {
           for await (const event of stream) {
             if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
+              if (pending) {
+                process.stdout.write("\n\n");
+                pending = false;
+              }
               process.stdout.write(event.delta.text);
+              spoke = true;
             }
           }
+          if (spoke) pending = true;
           const message = await stream.finalMessage();
           if (message.stop_reason === "refusal") {
             process.stdout.write("\n[Declined by safety classifiers. Rephrase, or ask for something else.]");
