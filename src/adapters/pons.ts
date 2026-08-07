@@ -390,12 +390,12 @@ async function selectSalt(
 export function pons(): LaunchAdapter<PonsLaunchOptions> {
   return {
     id: "pons",
-    version: "0.1.0",
+    version: "0.2.0",
     chainId: 4663,
     capabilities: {
       creatorFees: true,
       deterministicTokenAddress: true,
-      initialBuy: "optional",
+      initialBuy: "unsupported",
       metadataStorage: ["onchain", "https", "ipfs"],
       pricingModel: "fixed-liquidity",
       taxToken: false,
@@ -405,6 +405,12 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
       const dexId = parseConfigId(context.launch.dexId, "dexId");
       const feeWallet = getAddress(context.launch.feeWallet ?? context.account);
       const initialBuy = parseUint(context.launch.initialBuy, "initialBuy");
+      if (initialBuy !== 0n) {
+        throw new NexusError(
+          "UNSUPPORTED_CAPABILITY",
+          "Nexus will not use Pons V1's atomic initial buy because it has no minimum-output protection.",
+        );
+      }
       if (context.token.name.length === 0 || context.token.symbol.length === 0) {
         throw new NexusError("INVALID_TOKEN_METADATA", "Pons requires a non-empty token name and symbol.");
       }
@@ -464,14 +470,6 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
             "The entire supply is seeded as one-sided liquidity and the resulting Uniswap V3 position is transferred to the Pons locker. Nexus cannot recover it.",
         },
       ];
-      if (initialBuy !== 0n) {
-        warnings.push({
-          code: "UNPROTECTED_INITIAL_BUY",
-          message:
-            "The atomic initial buy executes through the protocol router with amountOutMinimum 0 and no price limit. Its output is bounded only by the launch-block restrictions, not by a slippage floor.",
-        });
-      }
-
       return {
         deployment: state.deployment,
         launch,
@@ -484,7 +482,7 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
           liquidityVenue: `Uniswap V3 ${state.dex.poolFee / 10_000}% ${state.launchConfig.pairToken} pool locked by the Pons locker`,
         },
         summary: {
-          protocol: "Pons",
+          protocol: "Pons V1",
           pricing:
             "Fixed supply priced by the pool's initial tick; every buy and sell trades against that same locked pool.",
           liquidity:
@@ -713,7 +711,7 @@ export function pons(): LaunchAdapter<PonsLaunchOptions> {
       return {
         verified: true,
         adapterId: "pons",
-        protocol: "Pons",
+        protocol: "Pons V1",
         planId: plan.id,
         chainId: plan.chainId,
         transactionHash: receipt.transactionHash,

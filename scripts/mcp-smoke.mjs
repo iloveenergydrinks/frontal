@@ -46,7 +46,7 @@ try {
   const listed = JSON.parse(adapters.content[0].text);
   assert.deepEqual(
     listed.map((adapter) => adapter.id).sort(),
-    ["flap-standard", "pons"],
+    ["flap-standard", "pons", "pons-v2"],
   );
 
   const missingPlan = await client.callTool({

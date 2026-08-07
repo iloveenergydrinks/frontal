@@ -4,8 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
-    <meta name="robots" content="noindex" />
-    <title>Review and sign a Nexus launch</title>
+    <meta name="description" content="Nexus is a guarded terminal agent and TypeScript library for launching tokens through reviewed EVM launchpad adapters." />
+    <title>Nexus — guarded EVM launches from your terminal</title>
     <style>
       :root { color-scheme: light dark; --line: #8883; --warn: #b45309; --err: #b91c1c; --ok: #15803d; }
       * { box-sizing: border-box; }
@@ -31,10 +31,51 @@
       pre { overflow-x: auto; padding: .75rem; border: 1px solid var(--line); border-radius: .4rem; background: #8881; }
       .note { font-size: .9rem; opacity: .75; }
       #broadcast-warning { border-left-color: var(--err); font-weight: 600; }
+      .hero { padding: 12vh 0 3rem; }
+      .hero h1 { font-size: clamp(2.5rem, 9vw, 5.5rem); line-height: .92; letter-spacing: -.07em; max-width: 11ch; }
+      .hero .lede { max-width: 38rem; font-size: 1.08rem; margin-top: 1.5rem; }
+      .install { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 2rem 0; padding: 1rem 1.1rem; border: 1px solid var(--line); border-radius: .55rem; background: #8881; }
+      .install code { font-size: 1rem; }
+      .adapter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: .75rem; }
+      .adapter { padding: 1rem; border: 1px solid var(--line); border-radius: .55rem; }
+      .adapter strong { display: block; margin-bottom: .35rem; }
+      .adapter p { margin: 0; opacity: .75; }
+      .links { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 2rem; }
+      a { color: inherit; text-underline-offset: .2em; }
     </style>
   </head>
   <body>
     <main>
+      <section id="home" class="hero" hidden>
+        <p class="mono">NEXUS / EVM LAUNCH AGENT</p>
+        <h1>Launch from the terminal. Sign in your wallet.</h1>
+        <p class="lede">
+          Nexus prepares a content-addressed plan from live chain state, simulates the exact transaction, and stops for
+          approval. Your private key never enters the package or the agent.
+        </p>
+        <div class="install">
+          <code>npx nexus-launch</code>
+          <span class="note">Node 20.19+</span>
+        </div>
+        <h2>Current adapters</h2>
+        <div class="adapter-grid">
+          <div class="adapter"><strong>Flap / BNB</strong><p>Bonding curve with PancakeSwap migration.</p></div>
+          <div class="adapter"><strong>Pons V1 / RH</strong><p>Fixed supply with locked Uniswap V3 liquidity.</p></div>
+          <div class="adapter"><strong>Pons V2 / RH</strong><p>Bonding curve graduating to locked Uniswap V4.</p></div>
+        </div>
+        <div class="links">
+          <a href="https://www.npmjs.com/package/nexus-launch">npm package</a>
+          <a href="https://github.com/iloveenergydrinks/frontal">source</a>
+        </div>
+        <h2>Signing boundary</h2>
+        <p class="note">
+          A launch request is not authorization. Nexus hashes the factory, calldata, value, predicted addresses,
+          economics, and warnings into one plan ID. A wallet opens only after that exact plan is revalidated and
+          simulated. Token launches are permanent and can lose all value; Nexus and its external protocols are unaudited.
+        </p>
+      </section>
+
+      <section id="signing" hidden>
       <h1>Review and sign a Nexus launch</h1>
       <p class="lede">
         This page runs entirely in your browser. The plan travels in the URL fragment, which is never sent to the
@@ -89,6 +130,7 @@
         transaction it shows you. Token launches are permanent and can lose all value. Nexus is unaudited, and so are
         the protocols it launches through.
       </p>
+      </section>
     </main>
     <script type="module" src="./app.js"></script>
   </body>

@@ -8,6 +8,7 @@ import { NexusError } from "./errors.js";
 import { flapStandard } from "./flap.js";
 import { parseLaunchPlan } from "./launch.js";
 import { pons } from "./pons.js";
+import { ponsV2 } from "./pons-v2.js";
 import { stringifyJson } from "./serialization.js";
 import type { LaunchAdapter, LaunchPlan } from "./types.js";
 
@@ -46,6 +47,7 @@ export function publicClientFor(chainId: number): PublicClient {
 export function adapterFor(id: string): LaunchAdapter<unknown> {
   if (id === "flap-standard") return flapStandard() as LaunchAdapter<unknown>;
   if (id === "pons") return pons() as LaunchAdapter<unknown>;
+  if (id === "pons-v2") return ponsV2() as LaunchAdapter<unknown>;
   throw new NexusError("UNSUPPORTED_ADAPTER", `Unknown adapter ${id}.`);
 }
 

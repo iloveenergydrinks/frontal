@@ -32,6 +32,25 @@ describe("pons deployment identity", () => {
     expect(adapter.chainId).toBe(4663);
     expect(adapter.capabilities.pricingModel).toBe("fixed-liquidity");
     expect(adapter.capabilities.deterministicTokenAddress).toBe(true);
-    expect(adapter.capabilities.initialBuy).toBe("optional");
+    expect(adapter.capabilities.initialBuy).toBe("unsupported");
+  });
+
+  it("rejects the V1 router's unprotected atomic initial buy", async () => {
+    await expect(
+      pons().prepare({
+        account: "0x0731dD4Aad7B14363fc2e77ff934646e809A46D8",
+        blockHash: `0x${"11".repeat(32)}`,
+        blockNumber: 1n,
+        launch: { initialBuy: 1n },
+        publicClient: {} as never,
+        token: {
+          description: "",
+          image: "",
+          name: "Nexus",
+          socials: { discord: "", farcaster: "", telegram: "", twitter: "", website: "" },
+          symbol: "NXS",
+        },
+      }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED_CAPABILITY" });
   });
 });

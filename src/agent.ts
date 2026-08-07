@@ -12,6 +12,7 @@ import { flapStandard } from "./flap.js";
 import { prepareLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
 import { encodePlanUrl } from "./plan-url.js";
 import { pons } from "./pons.js";
+import { ponsV2 } from "./pons-v2.js";
 import { canonicalJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 import type { Hash } from "viem";
@@ -44,9 +45,9 @@ A plan ID is an approval token. \`prepare_launch\` hashes the exact factory, cal
 
 ## Workflow
 
-1. Call list_adapters first. The protocols differ in ways that change what you should even ask for. Flap is a bonding curve on BNB that migrates to PancakeSwap; Pons is a fixed supply on Robinhood Chain seeded straight into a locked Uniswap V3 pool with no migration. Only Pons supports an initial buy. Do not offer a control the chosen adapter does not have.
+1. Call list_adapters first. The protocols differ in ways that change what you should even ask for. Flap is a bonding curve on BNB that migrates to PancakeSwap. Pons V1 is fixed supply on Robinhood Chain and seeds a locked Uniswap V3 pool immediately. Pons V2 starts on a bonding curve and graduates into permanently locked Uniswap V4 liquidity. Nexus does not offer an initial buy on any adapter until it can bind a nonzero minimum output. Do not offer a control the chosen adapter does not have.
 2. Ask the human for the name, symbol, description, image, and links. Never invent them, and never search their filesystem for an image — use only a path they gave you.
-3. flap-standard needs an IPFS metadata CID, so upload_flap_metadata must run first with a 512x512 PNG. That publishes the image publicly and cannot be undone: confirm before calling it. Pons stores the profile URI onchain and needs no upload.
+3. flap-standard needs an IPFS metadata CID, so upload_flap_metadata must run first with a 512x512 PNG. That publishes the image publicly and cannot be undone: confirm before calling it. Both Pons adapters store the profile URI onchain and need no upload.
 4. prepare_launch, then simulate_launch. Simulation rebuilds the plan from live chain state and compares every field, so a plan that no longer matches reality fails there rather than at signing. Always simulate before presenting anything for approval.
 5. Present the plan: the plan ID, chain, account, protocol and its address, the token name and symbol, the predicted token address, the transaction value, the funding line including any shortfall, and every warning in full. Never summarise away a warning about an unprotected buy, a permanent lock, or an upgradeable protocol.
 6. Give them the signing link from get_signing_link, tell them the plan ID the page must display, and stop. A page showing a different ID means the link was altered and they should not sign.
@@ -211,7 +212,7 @@ const listAdapters = betaZodTool({
   run: () => {
     try {
       return report(
-        [flapStandard(), pons()].map((adapter) => ({
+        [flapStandard(), pons(), ponsV2()].map((adapter) => ({
           id: adapter.id,
           chainId: adapter.chainId,
           capabilities: adapter.capabilities,
@@ -230,12 +231,15 @@ const prepareLaunchTool = betaZodTool({
   inputSchema: z.object({
     ...tokenShape,
     account: z.string().describe("Exact launch wallet. Nexus never holds its key."),
-    adapter: z.enum(["flap-standard", "pons"]),
-    feeWallet: z.string().optional().describe("Pons creator fee and initial-buy recipient."),
+    adapter: z.enum(["flap-standard", "pons", "pons-v2"]),
+    buybackEnabled: z.boolean().optional().describe("Enable Pons V2 creator buybacks."),
+    creatorFeeRecipient: z.string().optional().describe("Pons V2 creator fee recipient."),
+    creatorTaxBps: z.number().int().min(0).max(10_000).optional().describe("Pons V2 creator tax in basis points."),
+    feeWallet: z.string().optional().describe("Pons V1 creator fee recipient."),
     initialBuy: z
       .string()
       .optional()
-      .describe("Atomic buy in wei. Pons executes it with no minimum output; Flap rejects any nonzero value."),
+      .describe("Reserved for future guarded launch-and-buy support. Every current adapter rejects nonzero."),
     metadataCid: z.string().optional().describe("Bare IPFS CID. Required for flap-standard."),
     out: z.string().describe("Path to write the plan file."),
   }),
@@ -243,15 +247,24 @@ const prepareLaunchTool = betaZodTool({
     try {
       const account = requireAddress(input.account, "account");
       const adapter = adapterFor(input.adapter);
-      const launch =
-        input.adapter === "flap-standard"
-          ? { metadataCid: input.metadataCid ?? "" }
-          : {
+      const launch = input.adapter === "flap-standard"
+        ? { metadataCid: input.metadataCid ?? "" }
+        : input.adapter === "pons"
+          ? {
               dexId: 0,
               launchConfigId: 0,
               ...(input.feeWallet === undefined
                 ? {}
                 : { feeWallet: requireAddress(input.feeWallet, "feeWallet") }),
+              ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
+            }
+          : {
+              buybackEnabled: input.buybackEnabled ?? false,
+              creatorTaxBps: input.creatorTaxBps ?? 0,
+              launchConfigId: 0,
+              ...(input.creatorFeeRecipient === undefined
+                ? {}
+                : { creatorFeeRecipient: requireAddress(input.creatorFeeRecipient, "creatorFeeRecipient") }),
               ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
             };
       const plan = await prepareLaunch({

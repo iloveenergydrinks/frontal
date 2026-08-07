@@ -1,8 +1,8 @@
 # Nexus — Product and Developer-UX Validation Brief
 
-> Implementation status (2026-08-06): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-launch` / `nexus-mcp` executables. Flap Standard and Pons both pass live read-only mainnet simulation and full fork execution. No production token has been broadcast.
+> Implementation status (2026-08-07): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-launch` / `nexus-mcp` executables. Flap Standard, Pons V1, and Pons V2 pass full disposable-fork execution and verification. No fork test broadcasts to production.
 >
-> Correction (2026-08-06): the first Pons integration targeted `0x7E1EAbd52Ae29598e6483F72dCf1a70b14284dB8`, a deployment that is not the protocol's documented active factory, has never had launches enabled, and exposes a bonding-curve interface the live protocol does not use. It was mistaken for a launch-permission problem. The adapter now targets the documented active factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB` (start block `8991118`), where launching is permissionless. The section 4 protocol table below is corrected accordingly.
+> Correction (2026-08-07): `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB` is the live Pons V1 fixed-liquidity deployment, not Pons V2. Nexus preserves it under adapter ID `pons`. The separate `pons-v2` adapter targets the documented current bonding-curve/V4 factory `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e`; no saved V1 plan is retargeted.
 
 **Status:** Implemented release-candidate validation document  
 **Review date:** 2026-08-06  
@@ -131,8 +131,9 @@ A TypeScript developer starting from an empty project should be able to produce 
 | Adapter | Chain | Launch model | v0.1 status | Rationale |
 |---|---:|---|---|---|
 | `flapStandard` | BNB `56` | Bonding curve followed by protocol-defined DEX migration | Build | Flap exposes a documented Portal integration surface. Limit the first adapter to standard tokens. |
-| `pons` | Robinhood `4663` | Fixed supply seeded as one-sided Uniswap V3 liquidity, locked at launch | Build | Pons publishes verified source, deployment addresses, and events. Read the selected launch and DEX configuration live. |
-| `pons` legacy | Robinhood `4663` | Same model, superseded deployment | Read-only | Kept resolvable for historical launches. Nexus never prepares a new launch against it. |
+| `pons` | Robinhood `4663` | V1 fixed supply seeded as one-sided Uniswap V3 liquidity, locked at launch | Maintain | Preserve the live V1 deployment and saved-plan identity. Unsafe zero-minimum initial buys are rejected. |
+| `pons-v2` | Robinhood `4663` | Constant-product bonding curve graduating into permanently locked Uniswap V4 | Build | Current documented stack; pin economics, policy, dependencies, CREATE2 token and curve, and exact post-launch state. |
+| Pons legacy pre-V1 | Robinhood `4663` | Superseded deployment | Read-only | Kept resolvable for historical launches. Nexus never prepares a new launch against it. |
 | `pools` | Robinhood `4663` | Current product labels include Crowd Launch | Blocked | The public product is in beta and no stable public contract registry, ABI, or SDK was identified. Do not productionize a reverse-engineered frontend integration. |
 
 Protocol support is defined by an exact chain, deployment address, protocol version, and verified runtime code—not by a brand name alone.
@@ -166,6 +167,7 @@ Start with one package and subpath exports:
 nexus-launch
 nexus-launch/flap
 nexus-launch/pons
+nexus-launch/pons-v2
 nexus-launch/chains
 nexus-launch/mcp
 nexus                         # executable exposed by the package
@@ -181,10 +183,10 @@ The package executable is a thin shell over the same exported functions. It must
 
 ```ts
 import { prepareLaunch, simulateLaunch, sendLaunch, verifyLaunch } from "nexus-launch";
-import { pons } from "nexus-launch/pons";
+import { ponsV2 } from "nexus-launch/pons-v2";
 
 const plan = await prepareLaunch({
-  adapter: pons(),
+  adapter: ponsV2(),
   publicClient,
   account,
   token: {
@@ -194,10 +196,10 @@ const plan = await prepareLaunch({
     description: "Example community token",
   },
   launch: {
-    quoteToken: "0x0000000000000000000000000000000000000000",
+    pairToken: "0x0000000000000000000000000000000000000000",
     creatorFeeRecipient: account,
     creatorTaxBps: 0,
-    initialBuy: 10_000_000_000_000_000n,
+    buybackEnabled: false,
   },
 });
 
@@ -254,7 +256,7 @@ type LaunchPlan = {
   schemaVersion: "1";
   id: `0x${string}`;
   adapter: {
-    id: "flap-standard" | "pons-v2";
+    id: "flap-standard" | "pons" | "pons-v2";
     version: string;
   };
   chainId: number;

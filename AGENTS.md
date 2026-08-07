@@ -43,10 +43,10 @@ returns the exact command for the human to run.
 
 1. **`list_adapters`** first. Protocols differ in ways that change what you
    should even ask for. Flap is a bonding curve on BNB that migrates to
-   PancakeSwap; Pons is a fixed supply on Robinhood Chain seeded straight into a
-   locked Uniswap V3 pool with no migration. `capabilities.initialBuy` tells you
-   whether an initial buy is possible at all. Do not offer a control the selected
-   adapter does not support.
+   PancakeSwap; Pons V1 is fixed supply seeded straight into locked Uniswap V3;
+   Pons V2 starts on a bonding curve and graduates into permanently locked
+   Uniswap V4. `capabilities.initialBuy` is currently `unsupported` for all
+   adapters. Do not offer a control the selected adapter does not support.
 
 2. **Collect metadata from the human.** Never invent a token name, symbol,
    description, or image. Never search the filesystem for an image — use only a
@@ -55,7 +55,7 @@ returns the exact command for the human to run.
 3. **Upload metadata if the adapter needs it.** `flap-standard` requires an IPFS
    CID, so `upload_flap_metadata` must run first with a 512x512 PNG. It publishes
    the image publicly and cannot be undone, so confirm before calling it. `pons`
-   stores the profile URI onchain and needs no upload.
+   and `pons-v2` store the profile URI onchain and need no upload.
 
 4. **`prepare_launch`.** Signer-free; it cannot broadcast. Save the plan to a
    path the human can see.
@@ -69,7 +69,7 @@ returns the exact command for the human to run.
    account, protocol and its address, the token name and symbol, the predicted
    token address, the transaction value, every warning, and the funding line
    including any shortfall. Show warnings in full — never summarize away a
-   warning about an unprotected buy, a permanent lock, or an upgradeable
+   warning about a launch tax, permanent lock, or externally controlled
    protocol.
 
 7. **Hand off execution.** Give the human what `get_execution_instructions`

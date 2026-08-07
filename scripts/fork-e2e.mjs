@@ -13,6 +13,7 @@ import { bsc } from "viem/chains";
 import { flapStandard } from "../dist/flap.js";
 import { prepareLaunch, sendLaunch, simulateLaunch, verifyLaunch } from "../dist/index.js";
 import { pons } from "../dist/pons.js";
+import { ponsV2 } from "../dist/pons-v2.js";
 
 const BNB_ACCOUNT = getAddress("0xbdeBf49903Ab0BE38FbC242a236AC5c83CE49AaA");
 const RH_ACCOUNT = getAddress("0x0731dD4Aad7B14363fc2e77ff934646e809A46D8");
@@ -140,7 +141,7 @@ async function runPons() {
       launch: {
         dexId: 0,
         feeWallet: RH_ACCOUNT,
-        initialBuy: 10n ** 17n,
+        initialBuy: 0,
         launchConfigId: 0,
         saltSeed: "nexus-cli-fork-e2e-v1",
       },
@@ -175,7 +176,68 @@ async function runPons() {
   }
 }
 
+async function runPonsV2() {
+  const fork = await startFork({
+    chainId: 4_663,
+    port: 18_549,
+    upstream:
+      process.env.NEXUS_RH_FORK_URL ??
+      process.env.NEXUS_RH_RPC_URL ??
+      "https://rpc.mainnet.chain.robinhood.com",
+  });
+  try {
+    await fundAndImpersonate(fork.url, [RH_ACCOUNT]);
+    const chain = defineChain({
+      id: 4_663,
+      name: "Robinhood Chain fork",
+      nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
+      rpcUrls: { default: { http: [fork.url] } },
+    });
+    const publicClient = createPublicClient({ chain, transport: http(fork.url) });
+    const adapter = ponsV2();
+    const plan = await prepareLaunch({
+      account: RH_ACCOUNT,
+      adapter,
+      launch: {
+        buybackEnabled: false,
+        creatorFeeRecipient: RH_ACCOUNT,
+        creatorTaxBps: 0,
+        launchConfigId: 0,
+        saltSeed: "nexus-cli-pons-v2-fork-e2e-v1",
+      },
+      publicClient,
+      token: {
+        description: "Disposable local-fork Pons V2 launch.",
+        image: "ipfs://bafybeigdyrnexusforkimage",
+        name: "Nexus V2 Fork E2E",
+        socials: { website: "https://cli.nexus" },
+        symbol: "NXV2",
+      },
+    });
+    const simulation = await simulateLaunch({ adapter, plan, publicClient });
+    const walletClient = createWalletClient({ account: RH_ACCOUNT, chain, transport: http(fork.url) });
+    const hash = await sendLaunch({ adapter, plan, publicClient, walletClient });
+    const result = await verifyLaunch({ adapter, hash, plan, publicClient });
+    await rpc(fork.url, "anvil_stopImpersonatingAccount", [RH_ACCOUNT]);
+    return {
+      adapter: adapter.id,
+      curve: result.market,
+      hash,
+      planId: plan.id,
+      predictedToken: plan.request.launch.predictedToken,
+      shortfall: simulation.funding.shortfall,
+      token: result.token,
+      verified: result.verified,
+    };
+  } catch (error) {
+    throw new Error(`Pons V2 fork E2E failed. ${fork.diagnostics()}`, { cause: error });
+  } finally {
+    await stopFork(fork);
+  }
+}
+
 const results = [];
 results.push(await runFlap());
 results.push(await runPons());
+results.push(await runPonsV2());
 process.stdout.write(`${JSON.stringify({ ok: true, results }, null, 2)}\n`);

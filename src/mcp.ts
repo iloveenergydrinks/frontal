@@ -20,6 +20,7 @@ import { flapStandard } from "./flap.js";
 import { prepareLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
 import { encodePlanUrl } from "./plan-url.js";
 import { pons } from "./pons.js";
+import { ponsV2 } from "./pons-v2.js";
 import { canonicalJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 
@@ -157,7 +158,7 @@ server.registerTool(
   () => {
     try {
       return ok(
-        [flapStandard(), pons()].map((adapter) => ({
+        [flapStandard(), pons(), ponsV2()].map((adapter) => ({
           id: adapter.id,
           version: adapter.version,
           chainId: adapter.chainId,
@@ -179,14 +180,17 @@ server.registerTool(
     inputSchema: {
       ...tokenShape,
       account: z.string().describe("Exact launch wallet. Nexus never holds its key."),
-      adapter: z.enum(["flap-standard", "pons"]),
-      dexId: z.number().int().nonnegative().optional().describe("Pons DEX configuration. Default 0."),
-      feeWallet: z.string().optional().describe("Pons creator fee and initial-buy recipient."),
+      adapter: z.enum(["flap-standard", "pons", "pons-v2"]),
+      buybackEnabled: z.boolean().optional().describe("Enable Pons V2 creator buybacks."),
+      creatorFeeRecipient: z.string().optional().describe("Pons V2 creator fee recipient."),
+      creatorTaxBps: z.number().int().min(0).max(10_000).optional().describe("Pons V2 creator tax in basis points."),
+      dexId: z.number().int().nonnegative().optional().describe("Pons V1 DEX configuration. Default 0."),
+      feeWallet: z.string().optional().describe("Pons V1 creator fee recipient."),
       force: z.boolean().optional().describe("Replace an existing plan file."),
       initialBuy: z
         .string()
         .optional()
-        .describe("Atomic buy in wei. Pons executes it with no minimum output; Flap rejects any nonzero value."),
+        .describe("Reserved for future guarded launch-and-buy support. Every current adapter rejects nonzero."),
       launchConfigId: z.number().int().nonnegative().optional().describe("Pons launch configuration. Default 0."),
       metadataCid: z.string().optional().describe("Bare IPFS CID. Required for flap-standard."),
       out: z.string().describe("Path to write the plan file. Written with mode 0600."),
@@ -197,19 +201,29 @@ server.registerTool(
     try {
       const account = requireAddress(input.account, "account");
       const adapter = adapterFor(input.adapter);
-      const launch =
-        input.adapter === "flap-standard"
-          ? {
+      const launch = input.adapter === "flap-standard"
+        ? {
               metadataCid: input.metadataCid ?? "",
               ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
               ...(input.saltSeed === undefined ? {} : { saltSeed: input.saltSeed }),
             }
-          : {
+        : input.adapter === "pons"
+          ? {
               dexId: input.dexId ?? 0,
               launchConfigId: input.launchConfigId ?? 0,
               ...(input.feeWallet === undefined
                 ? {}
                 : { feeWallet: requireAddress(input.feeWallet, "feeWallet") }),
+              ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
+              ...(input.saltSeed === undefined ? {} : { saltSeed: input.saltSeed }),
+            }
+          : {
+              buybackEnabled: input.buybackEnabled ?? false,
+              creatorTaxBps: input.creatorTaxBps ?? 0,
+              launchConfigId: input.launchConfigId ?? 0,
+              ...(input.creatorFeeRecipient === undefined
+                ? {}
+                : { creatorFeeRecipient: requireAddress(input.creatorFeeRecipient, "creatorFeeRecipient") }),
               ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
               ...(input.saltSeed === undefined ? {} : { saltSeed: input.saltSeed }),
             };

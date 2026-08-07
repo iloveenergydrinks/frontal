@@ -6,6 +6,7 @@ import { flapStandard } from "../src/flap.js";
 import { simulateLaunch, verifyLaunch } from "../src/launch.js";
 import { decodePlanUrl } from "../src/plan-url.js";
 import { pons } from "../src/pons.js";
+import { ponsV2 } from "../src/pons-v2.js";
 import type { LaunchAdapter, LaunchPlan } from "../src/types.js";
 
 /**
@@ -40,6 +41,7 @@ function chainFor(chainId: number): Chain {
 function adapterFor(id: string): LaunchAdapter<unknown> {
   if (id === "flap-standard") return flapStandard() as LaunchAdapter<unknown>;
   if (id === "pons") return pons() as LaunchAdapter<unknown>;
+  if (id === "pons-v2") return ponsV2() as LaunchAdapter<unknown>;
   throw new NexusError("UNSUPPORTED_ADAPTER", `This page does not support the ${id} adapter.`);
 }
 
@@ -262,9 +264,12 @@ async function boot(): Promise<void> {
       }
     }
     if (window.location.hash === "" || window.location.hash === "#") {
-      status("info", "Open a Nexus signing link. This page reads the plan from the URL fragment.");
+      element("home").hidden = false;
       return;
     }
+    element("home").hidden = true;
+    element("signing").hidden = false;
+    document.title = "Review and sign a Nexus launch";
     status("working", "Decoding and checking the plan against its own content hash…");
     const loaded = await decodePlanUrl(window.location.hash);
     plan = loaded;

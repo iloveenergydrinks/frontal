@@ -31,7 +31,7 @@ try {
     encoding: "utf8",
   });
   const envelope = JSON.parse(output);
-  if (envelope?.schemaVersion !== "1.0" || envelope?.ok !== true || envelope?.data?.length !== 2) {
+  if (envelope?.schemaVersion !== "1.0" || envelope?.ok !== true || envelope?.data?.length !== 3) {
     throw new Error(`Installed CLI returned an invalid envelope: ${readFileSync(join(directory, "package.json"), "utf8")}`);
   }
   let failure;
@@ -51,7 +51,7 @@ try {
   );
   writeFileSync(
     join(directory, "main.js"),
-    'import { canonicalJson } from "nexus-launch"; import { flapStandard } from "nexus-launch/flap"; import { pons } from "nexus-launch/pons"; document.querySelector("#app").textContent = canonicalJson([flapStandard().id, pons().id]);\n',
+    'import { canonicalJson } from "nexus-launch"; import { flapStandard } from "nexus-launch/flap"; import { pons } from "nexus-launch/pons"; import { ponsV2 } from "nexus-launch/pons-v2"; document.querySelector("#app").textContent = canonicalJson([flapStandard().id, pons().id, ponsV2().id]);\n',
   );
   execFileSync(join(project, "node_modules", ".bin", "vite"), ["build", "--logLevel", "silent"], {
     cwd: directory,
