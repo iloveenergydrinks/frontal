@@ -1,10 +1,10 @@
 {
   "name": "nexus-launch",
   "version": "0.1.0",
-  "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification",
+  "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification, with an MCP server",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://nexus.cli",
+  "homepage": "https://github.com/iloveenergydrinks/frontal#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/iloveenergydrinks/frontal.git"
@@ -18,7 +18,8 @@
   },
   "bin": {
     "nexus": "./dist/cli.js",
-    "nexus-cli": "./dist/cli.js"
+    "nexus-cli": "./dist/cli.js",
+    "nexus-mcp": "./dist/mcp.js"
   },
   "exports": {
     ".": {
@@ -40,29 +41,36 @@
     "./pons": {
       "types": "./dist/pons.d.ts",
       "import": "./dist/pons.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js"
     }
   },
   "files": [
     "dist",
     "schemas",
     "README.md",
+    "AGENTS.md",
     "LICENSE",
     "PRODUCT_VALIDATION.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "check": "npm run typecheck && npm test && npm run build && npm run test:package && npm run pack:check",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:mcp && npm run test:package && npm run pack:check",
     "pack:check": "npm pack --dry-run",
     "test": "vitest run",
     "test:fork": "npm run build && node scripts/fork-e2e.mjs",
     "test:package": "node scripts/package-smoke.mjs",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:mcp": "node scripts/mcp-smoke.mjs"
   },
   "peerDependencies": {
     "viem": "^2.55.11"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@walletconnect/relay-auth": "1.1.0",
     "@walletconnect/universal-provider": "^2.23.10",
     "commander": "^15.0.0",
@@ -74,5 +82,23 @@
     "typescript": "^5.9.3",
     "viem": "^2.55.11",
     "vitest": "^4.1.10"
-  }
+  },
+  "bugs": {
+    "url": "https://github.com/iloveenergydrinks/frontal/issues"
+  },
+  "keywords": [
+    "evm",
+    "token-launch",
+    "launchpad",
+    "viem",
+    "mcp",
+    "model-context-protocol",
+    "agent",
+    "bnb",
+    "robinhood-chain",
+    "flap",
+    "pons",
+    "web3",
+    "cli"
+  ]
 }

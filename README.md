@@ -170,6 +170,29 @@ nexus --json launch verify \
   --tx 0xTransactionHash
 ```
 
+## MCP server
+
+Nexus ships an MCP server so an agent can drive the same workflow natively. Register it with any MCP client:
+
+```json
+{
+  "mcpServers": {
+    "nexus-launch": {
+      "command": "npx",
+      "args": ["-y", "-p", "nexus-launch", "nexus-mcp"],
+      "env": {
+        "NEXUS_BNB_RPC_URL": "https://your-bnb-rpc.example",
+        "NEXUS_RH_RPC_URL": "https://your-robinhood-rpc.example"
+      }
+    }
+  }
+}
+```
+
+It exposes `list_adapters`, `prepare_launch`, `simulate_launch`, `get_execution_instructions`, `verify_launch`, and `upload_flap_metadata`.
+
+**No MCP tool can broadcast a transaction.** Preparation, simulation, and verification are signer-free; execution stays a human action in a wallet Nexus does not control, so the server can only return the exact command to run. The packaged smoke test asserts this. Agent guidance lives in [AGENTS.md](./AGENTS.md).
+
 ## SDK
 
 The core SDK uses caller-supplied `viem` clients and is browser-compatible. Filesystem metadata upload is isolated in `nexus-launch/flap-metadata`; the WalletConnect dependency is isolated in the CLI.

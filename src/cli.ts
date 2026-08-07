@@ -1,40 +1,34 @@
 #!/usr/bin/env node
 
-import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 
 import UniversalProvider from "@walletconnect/universal-provider";
 import { Command } from "commander";
 import qrcode from "qrcode-terminal";
 import {
-  createPublicClient,
   createWalletClient,
   custom,
-  getAddress,
-  http,
-  isAddress,
-  type Address,
-  type Chain,
   type EIP1193Provider,
   type Hash,
-  type PublicClient,
 } from "viem";
 
-import { bnbSmartChain, robinhoodChain } from "./chains.js";
+import {
+  adapterFor,
+  chainFor,
+  publicClientFor,
+  readPlan,
+  requireAddress,
+  rpcUrlFor,
+  writePlan,
+} from "./environment.js";
 import { NexusError, toNexusError } from "./errors.js";
 import { uploadFlapMetadata } from "./flap-metadata.js";
 import { flapStandard, type FlapStandardLaunchOptions } from "./flap.js";
-import {
-  parseLaunchPlan,
-  prepareLaunch,
-  sendLaunch,
-  simulateLaunch,
-  verifyLaunch,
-} from "./launch.js";
+import { prepareLaunch, sendLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
 import { startLocalLauncher } from "./local-launcher.js";
 import { pons, type PonsLaunchOptions } from "./pons.js";
 import { stringifyJson } from "./serialization.js";
-import type { LaunchAdapter, LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
+import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 
 interface GlobalOptions {
   json?: boolean;
@@ -101,11 +95,6 @@ function failure(error: unknown): never {
   throw nexusError;
 }
 
-function requireAddress(value: string, field: string): Address {
-  if (!isAddress(value)) throw new NexusError("INVALID_ARGUMENT", `${field} must be an EVM address.`);
-  return getAddress(value);
-}
-
 function parseInteger(value: string | undefined, field: string, fallback: number): number {
   if (value === undefined) return fallback;
   const parsed = Number(value);
@@ -113,33 +102,6 @@ function parseInteger(value: string | undefined, field: string, fallback: number
     throw new NexusError("INVALID_ARGUMENT", `${field} must be a non-negative safe integer.`);
   }
   return parsed;
-}
-
-function chainFor(chainId: number): Chain {
-  if (chainId === bnbSmartChain.id) return bnbSmartChain;
-  if (chainId === robinhoodChain.id) return robinhoodChain;
-  throw new NexusError("UNSUPPORTED_CHAIN", `Nexus does not support chain ${chainId}.`);
-}
-
-function rpcUrlFor(chainId: number): string {
-  if (chainId === bnbSmartChain.id) {
-    return process.env.NEXUS_BNB_RPC_URL ?? bnbSmartChain.rpcUrls.default.http[0];
-  }
-  if (chainId === robinhoodChain.id) {
-    return process.env.NEXUS_RH_RPC_URL ?? robinhoodChain.rpcUrls.default.http[0];
-  }
-  throw new NexusError("UNSUPPORTED_CHAIN", `Nexus does not support chain ${chainId}.`);
-}
-
-function publicClientFor(chainId: number): PublicClient {
-  const chain = chainFor(chainId);
-  return createPublicClient({ chain, transport: http(rpcUrlFor(chainId)) }) as PublicClient;
-}
-
-function adapterFor(id: string): LaunchAdapter<unknown> {
-  if (id === "flap-standard") return flapStandard() as LaunchAdapter<unknown>;
-  if (id === "pons") return pons() as LaunchAdapter<unknown>;
-  throw new NexusError("UNSUPPORTED_ADAPTER", `Unknown adapter ${id}.`);
 }
 
 function metadataFrom(options: CommonPrepareOptions): TokenMetadata {
@@ -187,27 +149,6 @@ function launchOptions(options: PrepareOptions): FlapStandardLaunchOptions | Pon
     };
   }
   throw new NexusError("UNSUPPORTED_ADAPTER", `Unknown adapter ${options.adapter}.`);
-}
-
-async function readPlan(path: string): Promise<LaunchPlan> {
-  const contents = await readFile(path, "utf8").catch((cause: unknown) => {
-    throw new NexusError("INVALID_PLAN", `Unable to read plan ${path}.`, { cause });
-  });
-  return parseLaunchPlan(contents);
-}
-
-async function writePlan(path: string, plan: LaunchPlan, force: boolean): Promise<void> {
-  await writeFile(path, `${stringifyJson(plan)}\n`, {
-    encoding: "utf8",
-    flag: force ? "w" : "wx",
-    mode: 0o600,
-  }).catch((cause: unknown) => {
-    throw new NexusError(
-      "INVALID_ARGUMENT",
-      `Unable to write ${path}${force ? "." : "; use --force to replace an existing file."}`,
-      { cause },
-    );
-  });
 }
 
 async function walletConnectFor(plan: LaunchPlan): Promise<{
