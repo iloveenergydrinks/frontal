@@ -6,7 +6,7 @@ import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { adapterFor, publicClientFor, readPlan, requireAddress, writePlan } from "./environment.js";
-import { NexusError, toNexusError } from "./errors.js";
+import { toNexusError } from "./errors.js";
 import { uploadFlapMetadata } from "./flap-metadata.js";
 import { flapStandard } from "./flap.js";
 import { prepareLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
@@ -29,6 +29,8 @@ import type { Hash } from "viem";
 const MODEL = "claude-opus-5";
 const FALLBACK_MODEL = "claude-opus-4-8";
 const SIGNING_URL = process.env.NEXUS_SIGNING_URL ?? "https://cli.nexus/";
+/** Where to relay model traffic when the user has no Anthropic credential. */
+const RELAY_URL = process.env.NEXUS_RELAY_URL ?? "https://cli.nexus";
 
 const SYSTEM = `You are Nexus, a terminal agent that walks someone through launching a token on an EVM chain.
 
@@ -367,18 +369,14 @@ const TOOLS = [
 ];
 
 export async function startChat(): Promise<void> {
-  // Let the SDK resolve credentials: ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, or
-  // an `ant auth login` profile all work, so don't reject on a missing env var.
-  let client: Anthropic;
-  try {
-    client = new Anthropic();
-  } catch (cause) {
-    throw new NexusError("INVALID_ARGUMENT", "No Anthropic credentials were found.", {
-      cause,
-      recovery:
-        "Export ANTHROPIC_API_KEY, or run `ant auth login`. Never place a credential in command arguments.",
-    });
-  }
+  // With a credential of your own, talk to Anthropic directly and pay for your
+  // own tokens. Without one, relay through the operator's host so that
+  // installing the package is the only setup step. Either way no key is ever
+  // written to disk or embedded in this package.
+  const own = (process.env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_AUTH_TOKEN ?? "").trim() !== "";
+  const client = own
+    ? new Anthropic()
+    : new Anthropic({ baseURL: RELAY_URL, apiKey: "relayed-by-host" });
   const messages: Anthropic.Beta.BetaMessageParam[] = [];
   const io = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -448,12 +446,18 @@ export async function startChat(): Promise<void> {
       } catch (error) {
         if (error instanceof Anthropic.AuthenticationError) {
           process.stdout.write(
-            "\n[Anthropic rejected the credentials. Export ANTHROPIC_API_KEY or run `ant auth login`.]",
+            own
+              ? "\n[Anthropic rejected your credentials. Check ANTHROPIC_API_KEY.]"
+              : "\n[The Nexus host is not accepting agent requests right now.]",
           );
           continue;
         }
         if (error instanceof Anthropic.RateLimitError) {
-          process.stdout.write("\n[Rate limited by the Anthropic API. Wait a moment and try again.]");
+          process.stdout.write(
+            own
+              ? "\n[Rate limited by the Anthropic API. Wait a moment and try again.]"
+              : "\n[The shared Nexus host is rate limited. Wait a few minutes, or set ANTHROPIC_API_KEY to use your own.]",
+          );
           continue;
         }
         const nexusError = toNexusError(error);

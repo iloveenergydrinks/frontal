@@ -4,6 +4,8 @@ import { dirname, extname, join, normalize } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+import { relay } from "./proxy.mjs";
+
 /**
  * Serves the built signing page.
  *
@@ -50,13 +52,16 @@ const server = createServer(async (request, response) => {
   response.setHeader("x-content-type-options", "nosniff");
   response.setHeader("x-frame-options", "DENY");
 
+  const requested = new URL(request.url ?? "/", "http://localhost").pathname;
+
+  // The CLI agent relays through here so users need no key of their own.
+  if (await relay(request, response, requested)) return;
+
   if (request.method !== "GET" && request.method !== "HEAD") {
     response.writeHead(405, { allow: "GET, HEAD" });
     response.end();
     return;
   }
-
-  const requested = new URL(request.url ?? "/", "http://localhost").pathname;
   const relative = normalize(requested === "/" ? "/index.html" : requested).replace(/^(\.\.[/\\])+/u, "");
   const file = join(root, relative);
   if (!file.startsWith(root)) {
