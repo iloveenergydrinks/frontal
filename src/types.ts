@@ -11,7 +11,7 @@ export type JsonPrimitive = boolean | null | number | string;
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
 export type JsonObject = { [key: string]: JsonValue };
 
-export type AdapterId = "flap-standard" | "pons-v2";
+export type AdapterId = "flap-standard" | "pons";
 
 export interface SocialLinks {
   discord?: string;

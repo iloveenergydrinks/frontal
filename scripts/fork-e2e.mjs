@@ -5,20 +5,17 @@ import {
   createPublicClient,
   createWalletClient,
   defineChain,
-  encodeFunctionData,
   getAddress,
   http,
-  parseAbi,
 } from "viem";
 import { bsc } from "viem/chains";
 
 import { flapStandard } from "../dist/flap.js";
 import { prepareLaunch, sendLaunch, simulateLaunch, verifyLaunch } from "../dist/index.js";
-import { PONS_V2_FACTORY, ponsV2 } from "../dist/pons.js";
+import { pons } from "../dist/pons.js";
 
 const BNB_ACCOUNT = getAddress("0xbdeBf49903Ab0BE38FbC242a236AC5c83CE49AaA");
 const RH_ACCOUNT = getAddress("0x0731dD4Aad7B14363fc2e77ff934646e809A46D8");
-const PONS_OWNER = getAddress("0x0815A4881f9c4073a70fdF00600EbA54c5a5baAa");
 const TEST_BALANCE = "0x21e19e0c9bab2400000";
 
 async function rpc(url, method, params = []) {
@@ -128,7 +125,7 @@ async function runPons() {
       "https://rpc.mainnet.chain.robinhood.com",
   });
   try {
-    await fundAndImpersonate(fork.url, [PONS_OWNER, RH_ACCOUNT]);
+    await fundAndImpersonate(fork.url, [RH_ACCOUNT]);
     const chain = defineChain({
       id: 4_663,
       name: "Robinhood Chain fork",
@@ -136,26 +133,16 @@ async function runPons() {
       rpcUrls: { default: { http: [fork.url] } },
     });
     const publicClient = createPublicClient({ chain, transport: http(fork.url) });
-    const ownerWallet = createWalletClient({ account: PONS_OWNER, chain, transport: http(fork.url) });
-    const enableHash = await ownerWallet.sendTransaction({
-      data: encodeFunctionData({
-        abi: parseAbi(["function setLaunchEnabled(bool)"]),
-        args: [true],
-        functionName: "setLaunchEnabled",
-      }),
-      to: PONS_V2_FACTORY,
-    });
-    await publicClient.waitForTransactionReceipt({ hash: enableHash });
-
-    const adapter = ponsV2();
+    const adapter = pons();
     const plan = await prepareLaunch({
       account: RH_ACCOUNT,
       adapter,
       launch: {
-        buybackEnabled: false,
-        creatorFeeRecipient: RH_ACCOUNT,
-        creatorTaxBps: 0,
+        dexId: 0,
+        feeWallet: RH_ACCOUNT,
+        initialBuy: 10n ** 17n,
         launchConfigId: 0,
+        saltSeed: "nexus-cli-fork-e2e-v1",
       },
       publicClient,
       token: {
@@ -170,14 +157,13 @@ async function runPons() {
     const walletClient = createWalletClient({ account: RH_ACCOUNT, chain, transport: http(fork.url) });
     const hash = await sendLaunch({ adapter, plan, publicClient, walletClient });
     const result = await verifyLaunch({ adapter, hash, plan, publicClient });
-    for (const address of [PONS_OWNER, RH_ACCOUNT]) {
-      await rpc(fork.url, "anvil_stopImpersonatingAccount", [address]);
-    }
+    await rpc(fork.url, "anvil_stopImpersonatingAccount", [RH_ACCOUNT]);
     return {
       adapter: adapter.id,
       hash,
       market: result.market,
       planId: plan.id,
+      predictedToken: plan.request.launch.predictedToken,
       shortfall: simulation.funding.shortfall,
       token: result.token,
       verified: result.verified,

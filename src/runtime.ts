@@ -39,3 +39,9 @@ export async function erc1967Implementation(
 export function requireEqual<T>(actual: T, expected: T, message: string): void {
   if (actual !== expected) throw new NexusError("DEPLOYMENT_CODE_MISMATCH", message);
 }
+
+/** True when a provider rejected a historical read because it does not retain that state. */
+export function historicalStateUnavailable(error: unknown): boolean {
+  const message = error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error);
+  return /missing trie|historical state|not supported|pruned|state is not available/iu.test(message);
+}

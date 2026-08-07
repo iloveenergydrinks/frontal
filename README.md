@@ -3,7 +3,7 @@
 Nexus is an agent-friendly TypeScript library and terminal CLI for guarded token launches on EVM chains. Version 0.1 supports:
 
 - Flap Standard on BNB Smart Chain (`56`).
-- Pons V2 on Robinhood Chain (`4663`).
+- Pons on Robinhood Chain (`4663`).
 
 It prepares a content-addressed launch plan before opening a wallet, rebuilds that plan from live protocol state before every simulation and send, estimates exact funding, and verifies the resulting receipt and protocol event. Nexus never accepts or stores a seed phrase or private key.
 
@@ -13,7 +13,9 @@ It prepares a content-addressed launch plan before opening a wallet, rebuilds th
 
 This repository is a `0.1.0` release candidate. The package name reserved for publication is `nexus-launch`; both installed executables are available as `nexus` and `nexus-cli`. `nexus-cli` itself is occupied on npm by an unrelated package.
 
-The BNB adapter currently passes read-only mainnet simulation and full fork execution/verification. The Robinhood adapter passes full fork execution/verification, but the live Pons V2 factory currently has public launches disabled and the configured Robinhood wallet is not whitelisted. Nexus fails closed until either condition changes.
+Both adapters pass read-only mainnet simulation and full fork execution/verification. No production token has been broadcast.
+
+The Pons adapter targets the protocol's documented active deployment (factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB`, start block `8991118`). Launching is permissionless there. The documented legacy deployment stays readable for historical launches and is never used to prepare a new one.
 
 ## Install
 
@@ -91,22 +93,24 @@ nexus --json launch prepare \
   --out ./flap-plan.json
 ```
 
-Pons V2:
+Pons:
 
 ```bash
 nexus --json launch prepare \
-  --adapter pons-v2 \
+  --adapter pons \
   --account 0xYourRobinhoodWallet \
   --name 'Example' \
   --symbol EXAMPLE \
   --description 'No promised utility.' \
   --image ipfs://bafy... \
   --website https://example.com \
-  --creator-fee-recipient 0xYourRobinhoodWallet \
-  --creator-tax-bps 0 \
+  --fee-wallet 0xYourRobinhoodWallet \
   --launch-config-id 0 \
+  --dex-id 0 \
   --out ./pons-plan.json
 ```
+
+Pons stores the profile onchain, so `--image` accepts any URI the protocol should record. Add `--initial-buy <wei>` to fund the atomic creator buy; the transaction value becomes the launch fee plus that amount.
 
 Preparation is signer-free and cannot broadcast. Existing files are not overwritten unless `--force` is explicit. Plans are written with mode `0600`.
 
@@ -214,13 +218,14 @@ import { uploadFlapMetadata } from "nexus-launch/flap-metadata";
 - Embedded initial buy is disabled because the protocol call has no minimum-output field.
 - Nexus pins the Portal proxy, implementation, token implementation, launch facets, Multi-DEX router, PCS migrator, protocol version, quote configuration, salt lock, and runtime hashes.
 
-### Pons V2
+### Pons
 
-- Calls the live Robinhood Chain V2 factory.
-- Reads and binds the selected launch configuration, launch fee, creator-tax ceiling, public/whitelist gate, and economics digest.
-- Uses the Pons constant-product bonding curve and protocol-defined graduation into permanently locked full-range Uniswap V4 liquidity.
-- Creator tax and buyback are explicit adapter options; initial buy is not part of `launchToken`.
-- Live production preparation is unavailable while public launch is disabled and the exact account is not whitelisted.
+- Calls `launchToken` on the documented active Robinhood Chain factory.
+- Reads and binds the launch fee, public/whitelist gate, locker, selected launch configuration, and selected DEX configuration, including the runtime code of the pool factory, position manager, and swap router.
+- Mints a fixed 1,000,000,000 supply, seeds it as one-sided liquidity in a Uniswap V3 1% pool against the configured pair token, and transfers the position to the Pons locker. There is no bonding curve and no migration; the pool a token launches into is the pool it graduates in.
+- Derives a CREATE2 salt, commits the protocol's `predictTokenAddress` result to the plan, and rejects a salt whose token address or pool already exists.
+- The atomic creator buy is optional. The protocol executes it through its own router with `amountOutMinimum` 0, so Nexus plans it only behind an explicit warning.
+- Launch-block restrictions (max wallet, max buy, restriction blocks) come from the live configuration and appear in the plan summary.
 
 ## Metadata and funding
 

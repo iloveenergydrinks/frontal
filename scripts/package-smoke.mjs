@@ -46,7 +46,7 @@ try {
   );
   writeFileSync(
     join(directory, "main.js"),
-    'import { canonicalJson } from "nexus-launch"; import { flapStandard } from "nexus-launch/flap"; import { ponsV2 } from "nexus-launch/pons"; document.querySelector("#app").textContent = canonicalJson([flapStandard().id, ponsV2().id]);\n',
+    'import { canonicalJson } from "nexus-launch"; import { flapStandard } from "nexus-launch/flap"; import { pons } from "nexus-launch/pons"; document.querySelector("#app").textContent = canonicalJson([flapStandard().id, pons().id]);\n',
   );
   execFileSync(join(project, "node_modules", ".bin", "vite"), ["build", "--logLevel", "silent"], {
     cwd: directory,

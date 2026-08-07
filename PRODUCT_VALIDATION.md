@@ -1,6 +1,8 @@
 # Nexus — Product and Developer-UX Validation Brief
 
-> Implementation status (2026-08-06): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-cli` executables. Flap Standard passes live read-only simulation and full BNB-fork execution. Pons V2 passes full Robinhood-fork execution but production preparation remains fail-closed because public launches are disabled and the selected wallet is not whitelisted. No production token has been broadcast.
+> Implementation status (2026-08-06): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-cli` executables. Flap Standard and Pons both pass live read-only mainnet simulation and full fork execution. No production token has been broadcast.
+>
+> Correction (2026-08-06): the first Pons integration targeted `0x7E1EAbd52Ae29598e6483F72dCf1a70b14284dB8`, a deployment that is not the protocol's documented active factory, has never had launches enabled, and exposes a bonding-curve interface the live protocol does not use. It was mistaken for a launch-permission problem. The adapter now targets the documented active factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB` (start block `8991118`), where launching is permissionless. The section 4 protocol table below is corrected accordingly.
 
 **Status:** Implemented release-candidate validation document  
 **Review date:** 2026-08-06  
@@ -32,7 +34,7 @@ Nexus is an integration layer over existing launch protocols. It is not another 
 Ship one open-source TypeScript package with:
 
 1. Flap standard-token launches on BNB Smart Chain.
-2. Pons V2 launches on Robinhood Chain.
+2. Pons launches on Robinhood Chain.
 3. A protocol-adapter interface that does not pretend the protocols have identical economics.
 4. Signer-free transaction planning, pre-send simulation, injected-wallet execution, and receipt verification.
 5. Capability discovery so applications can render only the controls supported by the selected protocol.
@@ -111,7 +113,7 @@ A TypeScript developer starting from an empty project should be able to produce 
 - A graphical launchpad.
 - Cross-chain bridging.
 - Tax/vault Flap token variants.
-- Pons V1 compatibility.
+- The superseded Pons deployment as a launch target.
 - Pools integration before an official, stable developer surface exists.
 - Metadata pinning as a Nexus-hosted service.
 - Automatic transaction retries.
@@ -129,8 +131,8 @@ A TypeScript developer starting from an empty project should be able to produce 
 | Adapter | Chain | Launch model | v0.1 status | Rationale |
 |---|---:|---|---|---|
 | `flapStandard` | BNB `56` | Bonding curve followed by protocol-defined DEX migration | Build | Flap exposes a documented Portal integration surface. Limit the first adapter to standard tokens. |
-| `ponsV2` | Robinhood `4663` | Bonding curve followed by permanently locked Uniswap V4 liquidity | Build | Pons publishes source and deployment information. Read the selected launch configuration live. |
-| `ponsV1` | Robinhood `4663` | Fixed supply with one-sided Uniswap V3 liquidity | Later | Useful compatibility path, but it doubles protocol-specific UX and verification work before the core API is proven. |
+| `pons` | Robinhood `4663` | Fixed supply seeded as one-sided Uniswap V3 liquidity, locked at launch | Build | Pons publishes verified source, deployment addresses, and events. Read the selected launch and DEX configuration live. |
+| `pons` legacy | Robinhood `4663` | Same model, superseded deployment | Read-only | Kept resolvable for historical launches. Nexus never prepares a new launch against it. |
 | `pools` | Robinhood `4663` | Current product labels include Crowd Launch | Blocked | The public product is in beta and no stable public contract registry, ABI, or SDK was identified. Do not productionize a reverse-engineered frontend integration. |
 
 Protocol support is defined by an exact chain, deployment address, protocol version, and verified runtime code—not by a brand name alone.
@@ -178,10 +180,10 @@ The package executable is a thin shell over the same exported functions. It must
 
 ```ts
 import { prepareLaunch, simulateLaunch, sendLaunch, verifyLaunch } from "@nexus/launch";
-import { ponsV2 } from "@nexus/launch/pons";
+import { pons } from "@nexus/launch/pons";
 
 const plan = await prepareLaunch({
-  adapter: ponsV2(),
+  adapter: pons(),
   publicClient,
   account,
   token: {
@@ -385,7 +387,7 @@ For terminal use, Nexus is the application that configures the metadata adapter.
 ```text
 nexus configure metadata
 nexus launch prepare \
-  --adapter pons-v2 \
+  --adapter pons \
   --name "Example" \
   --symbol EXAMPLE \
   --image ./example.png \
@@ -508,22 +510,22 @@ Execution requires explicit approval of the displayed plan. A terminal agent may
 - [ ] Explains the bonding-curve and migration behavior in the plan summary.
 - [ ] Uses a provider capable of the required reads; BNB public endpoints with restricted methods are not assumed to be archival/indexing providers.
 
-### Pons V2 adapter
+### Pons adapter
 
-- [ ] Uses the official V2 factory deployment on Robinhood Chain.
-- [ ] Reads and validates the selected live launch configuration.
-- [ ] Uses the protocol's preview/economics reads when available.
-- [ ] Binds the launch configuration and economics digest to the plan.
-- [ ] Explains the bonding curve, graduation, Uniswap V4 liquidity, and permanent lock.
-- [ ] Verifies the emitted token and associated launch/pool identity.
+- [ ] Uses the deployment the protocol documents as active, verified by address and runtime code, and never the superseded deployment.
+- [ ] Reads and validates the selected live launch configuration and DEX configuration, including that both are enabled.
+- [ ] Binds the launch fee, locker, pair token, supply, graduation threshold, launch-block restrictions, and the runtime code of the pool factory, position manager, and swap router to the plan.
+- [ ] Commits the protocol's own `predictTokenAddress` result and rejects a salt whose token address or pool already exists.
+- [ ] Explains fixed supply, one-sided liquidity, the locked position, and that no migration occurs.
+- [ ] Treats the atomic creator buy as opt-in and warns that the protocol executes it with no minimum output.
+- [ ] Verifies the emitted token, pool, position, factory launch record, onchain token metadata, and that the locker holds the position.
 - [ ] Detects factory deployment or runtime-code changes before send.
 
-### Pons V1 compatibility decision
+### Deployment-identity decision
 
-Recommended: defer until the shared plan/simulation/verification API is proven with Flap and Pons V2.
+Protocol support is defined by an exact chain, deployment address, and verified runtime code. A brand name, a repository, or an interface that merely looks like the protocol is not sufficient evidence that a contract is the live deployment.
 
-- [ ] Defer to version 0.2.
-- [ ] Include in version 0.1. If selected, add separate V3 liquidity, CREATE2 prediction, and position-lock acceptance criteria before coding.
+- [ ] Before an adapter is built, confirm the target address against the protocol's own published integration documentation and confirm it is transacting.
 
 ---
 
@@ -677,7 +679,7 @@ Complete this table before implementation begins.
 |---|---|---|
 | Product boundary | Launch integration SDK only | Launch SDK and thin terminal CLI |
 | v0.1 adapters | Flap standard + Pons V2 | Flap Standard + Pons V2 |
-| Pons V1 | Defer to v0.2 | Deferred |
+| Superseded Pons deployment | Read-only; never a launch target | Recorded |
 | Pools | Block until official integration surface | Deferred |
 | Package structure | One package with subpath exports | `nexus-launch` with core, chain, Flap, Pons, and Node metadata subpaths |
 | Terminal interface | Thin `nexus` executable over the library, with stable JSON output | `nexus` and `nexus-cli` binaries |

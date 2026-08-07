@@ -14,7 +14,7 @@ export {
 } from "./metadata.js";
 export { canonicalJson, stringifyJson } from "./serialization.js";
 export { flapStandard, predictFlapStandardToken, type FlapStandardLaunchOptions } from "./flap.js";
-export { ponsV2, type PonsV2LaunchOptions } from "./pons.js";
+export { PONS_FACTORY, PONS_LOCKER, pons, type PonsLaunchOptions } from "./pons.js";
 export type {
   AdapterId,
   FundingRequirement,

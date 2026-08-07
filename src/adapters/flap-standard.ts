@@ -18,7 +18,12 @@ import {
 import { NexusError } from "../errors.js";
 import { comparePlanSnapshot } from "../launch.js";
 import { canonicalJson } from "../serialization.js";
-import { erc1967Implementation, requireEqual, runtimeCodeHash } from "../runtime.js";
+import {
+  erc1967Implementation,
+  historicalStateUnavailable,
+  requireEqual,
+  runtimeCodeHash,
+} from "../runtime.js";
 import type {
   AdapterContext,
   AdapterPreparation,
@@ -107,11 +112,6 @@ function cloneRuntimeCode(implementation: Address): Hex {
 
 function cloneInitCode(implementation: Address): Hex {
   return concatHex(["0x3d602d80600a3d3981f3", cloneRuntimeCode(implementation)]);
-}
-
-function historicalStateUnavailable(error: unknown): boolean {
-  const message = error instanceof Error ? `${error.message} ${String(error.cause ?? "")}` : String(error);
-  return /missing trie|historical state|not supported|pruned|state is not available/iu.test(message);
 }
 
 export function predictFlapStandardToken(salt: Hash): Address {

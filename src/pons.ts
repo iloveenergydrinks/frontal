@@ -1,7 +1,11 @@
 export {
-  PONS_V2_FACTORY,
-  PONS_V2_RUNTIME_HASH,
-  ponsV2,
-  ponsV2Abi,
-  type PonsV2LaunchOptions,
-} from "./adapters/pons-v2.js";
+  PONS_FACTORY,
+  PONS_FACTORY_RUNTIME_HASH,
+  PONS_LEGACY_FACTORY,
+  PONS_LOCKER,
+  PONS_LOCKER_RUNTIME_HASH,
+  PONS_PROTOCOL_VERSION,
+  pons,
+  ponsFactoryAbi,
+  type PonsLaunchOptions,
+} from "./adapters/pons.js";

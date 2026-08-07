@@ -32,7 +32,7 @@ import {
   verifyLaunch,
 } from "./launch.js";
 import { startLocalLauncher } from "./local-launcher.js";
-import { ponsV2, type PonsV2LaunchOptions } from "./pons.js";
+import { pons, type PonsLaunchOptions } from "./pons.js";
 import { stringifyJson } from "./serialization.js";
 import type { LaunchAdapter, LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 
@@ -58,13 +58,11 @@ interface CommonPrepareOptions {
 
 interface PrepareOptions extends CommonPrepareOptions {
   antiFarmerDuration?: string;
-  buyback?: boolean;
-  creatorFeeRecipient?: string;
-  creatorTaxBps?: string;
+  dexId?: string;
+  feeWallet?: string;
   initialBuy?: string;
   launchConfigId?: string;
   metadataCid?: string;
-  pairToken?: string;
   salt?: string;
   saltSeed?: string;
 }
@@ -140,7 +138,7 @@ function publicClientFor(chainId: number): PublicClient {
 
 function adapterFor(id: string): LaunchAdapter<unknown> {
   if (id === "flap-standard") return flapStandard() as LaunchAdapter<unknown>;
-  if (id === "pons-v2") return ponsV2() as LaunchAdapter<unknown>;
+  if (id === "pons") return pons() as LaunchAdapter<unknown>;
   throw new NexusError("UNSUPPORTED_ADAPTER", `Unknown adapter ${id}.`);
 }
 
@@ -161,7 +159,7 @@ function metadataFrom(options: CommonPrepareOptions): TokenMetadata {
   };
 }
 
-function launchOptions(options: PrepareOptions): FlapStandardLaunchOptions | PonsV2LaunchOptions {
+function launchOptions(options: PrepareOptions): FlapStandardLaunchOptions | PonsLaunchOptions {
   if (options.adapter === "flap-standard") {
     if (options.metadataCid === undefined) {
       throw new NexusError("INVALID_ARGUMENT", "--metadata-cid is required for flap-standard.");
@@ -176,17 +174,16 @@ function launchOptions(options: PrepareOptions): FlapStandardLaunchOptions | Pon
       ...(options.saltSeed === undefined ? {} : { saltSeed: options.saltSeed }),
     };
   }
-  if (options.adapter === "pons-v2") {
+  if (options.adapter === "pons") {
     return {
-      buybackEnabled: options.buyback ?? false,
-      creatorTaxBps: parseInteger(options.creatorTaxBps, "creatorTaxBps", 0),
+      dexId: parseInteger(options.dexId, "dexId", 0),
       launchConfigId: parseInteger(options.launchConfigId, "launchConfigId", 0),
-      ...(options.creatorFeeRecipient === undefined
+      ...(options.feeWallet === undefined
         ? {}
-        : { creatorFeeRecipient: requireAddress(options.creatorFeeRecipient, "creatorFeeRecipient") }),
-      ...(options.pairToken === undefined
-        ? {}
-        : { pairToken: requireAddress(options.pairToken, "pairToken") }),
+        : { feeWallet: requireAddress(options.feeWallet, "feeWallet") }),
+      ...(options.initialBuy === undefined ? {} : { initialBuy: options.initialBuy }),
+      ...(options.salt === undefined ? {} : { salt: options.salt as Hash }),
+      ...(options.saltSeed === undefined ? {} : { saltSeed: options.saltSeed }),
     };
   }
   throw new NexusError("UNSUPPORTED_ADAPTER", `Unknown adapter ${options.adapter}.`);
@@ -281,7 +278,7 @@ program
   .description("list supported launch adapters and capabilities")
   .action(function (this: Command) {
     try {
-      const adapters = [flapStandard(), ponsV2()].map((adapter) => ({
+      const adapters = [flapStandard(), pons()].map((adapter) => ({
         id: adapter.id,
         version: adapter.version,
         chainId: adapter.chainId,
@@ -333,7 +330,7 @@ const launch = program.command("launch").description("guarded launch workflow");
 launch
   .command("prepare")
   .description("prepare a content-addressed launch plan without signing")
-  .requiredOption("--adapter <id>", "flap-standard or pons-v2")
+  .requiredOption("--adapter <id>", "flap-standard or pons")
   .requiredOption("--account <address>", "exact launch wallet")
   .requiredOption("--name <name>", "token name")
   .requiredOption("--symbol <symbol>", "token symbol")
@@ -345,15 +342,13 @@ launch
   .option("--discord <url>", "Discord HTTPS URL")
   .option("--farcaster <url>", "Farcaster HTTPS URL")
   .option("--metadata-cid <cid>", "bare Flap metadata CID")
-  .option("--salt <bytes32>", "explicit Flap CREATE2 salt")
-  .option("--salt-seed <seed>", "deterministic Flap vanity-search seed")
+  .option("--salt <bytes32>", "explicit CREATE2 salt")
+  .option("--salt-seed <seed>", "deterministic salt-search seed")
   .option("--anti-farmer-duration <seconds>", "Flap anti-farmer duration", "0")
-  .option("--initial-buy <base-units>", "embedded buy amount; unsupported adapters reject nonzero")
-  .option("--creator-fee-recipient <address>", "Pons creator fee recipient")
-  .option("--creator-tax-bps <bps>", "Pons creator tax", "0")
+  .option("--initial-buy <base-units>", "atomic buy amount; unsupported adapters reject nonzero")
+  .option("--fee-wallet <address>", "Pons creator fee and initial-buy recipient")
   .option("--launch-config-id <id>", "Pons launch configuration", "0")
-  .option("--pair-token <address>", "Pons pair token; zero/native by default")
-  .option("--buyback", "enable Pons buyback")
+  .option("--dex-id <id>", "Pons DEX configuration", "0")
   .option("--out <path>", "plan output file", "nexus-launch-plan.json")
   .option("--force", "replace an existing output file")
   .action(async function (this: Command, options: PrepareOptions) {
