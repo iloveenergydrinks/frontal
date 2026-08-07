@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -21,6 +21,11 @@ try {
     ["install", "--ignore-scripts", "--no-audit", "--no-fund", "viem@2.55.11", join(directory, filename)],
     { cwd: directory, stdio: "ignore" },
   );
+  for (const bin of ["nexus", "clinexus", "nexus-mcp"]) {
+    if (!existsSync(join(directory, "node_modules", ".bin", bin))) {
+      throw new Error(`Installed package is missing the ${bin} executable.`);
+    }
+  }
   const output = execFileSync(join(directory, "node_modules", ".bin", "nexus"), ["--json", "adapters"], {
     cwd: directory,
     encoding: "utf8",
@@ -46,7 +51,7 @@ try {
   );
   writeFileSync(
     join(directory, "main.js"),
-    'import { canonicalJson } from "nexus-launch"; import { flapStandard } from "nexus-launch/flap"; import { pons } from "nexus-launch/pons"; document.querySelector("#app").textContent = canonicalJson([flapStandard().id, pons().id]);\n',
+    'import { canonicalJson } from "clinexus"; import { flapStandard } from "clinexus/flap"; import { pons } from "clinexus/pons"; document.querySelector("#app").textContent = canonicalJson([flapStandard().id, pons().id]);\n',
   );
   execFileSync(join(project, "node_modules", ".bin", "vite"), ["build", "--logLevel", "silent"], {
     cwd: directory,

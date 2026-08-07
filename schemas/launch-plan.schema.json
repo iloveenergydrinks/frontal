@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://nexus.cli/schemas/launch-plan.schema.json",
+  "$id": "https://cli.nexus/schemas/launch-plan.schema.json",
   "title": "Nexus launch plan",
   "type": "object",
   "additionalProperties": false,

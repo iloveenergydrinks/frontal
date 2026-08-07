@@ -1,10 +1,10 @@
 {
-  "name": "nexus-launch",
+  "name": "clinexus",
   "version": "0.1.0",
   "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification, with an MCP server",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://github.com/iloveenergydrinks/frontal#readme",
+  "homepage": "https://cli.nexus",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/iloveenergydrinks/frontal.git"
@@ -18,7 +18,7 @@
   },
   "bin": {
     "nexus": "./dist/cli.js",
-    "nexus-cli": "./dist/cli.js",
+    "clinexus": "./dist/cli.js",
     "nexus-mcp": "./dist/mcp.js"
   },
   "exports": {

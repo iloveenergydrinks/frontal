@@ -25,11 +25,11 @@ describe("token metadata", () => {
     const result = normalizeTokenMetadata({
       name: "  Nexus  ",
       symbol: " NXS ",
-      socials: { website: "https://nexus.cli" },
+      socials: { website: "https://cli.nexus" },
     });
     expect(result.name).toBe("Nexus");
     expect(result.symbol).toBe("NXS");
-    expect(result.socials.website).toBe("https://nexus.cli/");
+    expect(result.socials.website).toBe("https://cli.nexus/");
   });
 
   it("rejects invisible controls and non-HTTPS social links", () => {
@@ -37,7 +37,7 @@ describe("token metadata", () => {
       NexusError,
     );
     expect(() =>
-      normalizeTokenMetadata({ name: "Nexus", symbol: "NXS", socials: { website: "http://nexus.cli" } }),
+      normalizeTokenMetadata({ name: "Nexus", symbol: "NXS", socials: { website: "http://cli.nexus" } }),
     ).toThrowError(/HTTPS/u);
   });
 
@@ -65,7 +65,7 @@ describe("token metadata", () => {
         creator: "0x1111111111111111111111111111111111111111",
         description: "Nexus E2E",
         imagePath,
-        website: "https://nexus.cli",
+        website: "https://cli.nexus",
       });
       expect(result).toMatchObject({
         imageCid: "bafyImage",

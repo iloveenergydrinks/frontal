@@ -33,7 +33,7 @@ import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
  * transaction.
  */
 
-const SERVER_NAME = "nexus-launch";
+const SERVER_NAME = "clinexus";
 const SERVER_VERSION = "0.1.0";
 
 interface ToolResult {

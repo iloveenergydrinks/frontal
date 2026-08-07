@@ -92,7 +92,7 @@ async function runFlap() {
       token: {
         description: "Disposable local-fork launch.",
         name: "Nexus Fork E2E",
-        socials: { website: "https://nexus.cli" },
+        socials: { website: "https://cli.nexus" },
         symbol: "NXFORK",
       },
     });
@@ -149,7 +149,7 @@ async function runPons() {
         description: "Disposable local-fork launch.",
         image: "ipfs://bafybeigdyrnexusforkimage",
         name: "Nexus Fork E2E",
-        socials: { website: "https://nexus.cli" },
+        socials: { website: "https://cli.nexus" },
         symbol: "NXFORK",
       },
     });

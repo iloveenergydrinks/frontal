@@ -170,7 +170,7 @@ async function walletConnectFor(plan: LaunchPlan): Promise<{
     metadata: {
       name: "Nexus CLI",
       description: "Guarded EVM token launch execution",
-      url: "https://nexus.cli",
+      url: "https://cli.nexus",
       icons: [],
     },
   });
@@ -209,7 +209,7 @@ async function walletConnectFor(plan: LaunchPlan): Promise<{
 }
 
 program
-  .name("nexus-cli")
+  .name("nexus")
   .description("Guarded EVM token launch planning, simulation, execution, and verification")
   .version("0.1.0")
   .option("--json", "emit the stable Nexus JSON envelope");

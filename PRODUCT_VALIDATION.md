@@ -1,6 +1,6 @@
 # Nexus — Product and Developer-UX Validation Brief
 
-> Implementation status (2026-08-06): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-cli` executables. Flap Standard and Pons both pass live read-only mainnet simulation and full fork execution. No production token has been broadcast.
+> Implementation status (2026-08-06): accepted scope is implemented as `clinexus` with `nexus` / `clinexus` / `nexus-mcp` executables. Flap Standard and Pons both pass live read-only mainnet simulation and full fork execution. No production token has been broadcast.
 >
 > Correction (2026-08-06): the first Pons integration targeted `0x7E1EAbd52Ae29598e6483F72dCf1a70b14284dB8`, a deployment that is not the protocol's documented active factory, has never had launches enabled, and exposes a bonding-curve interface the live protocol does not use. It was mistaken for a launch-permission problem. The adapter now targets the documented active factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB` (start block `8991118`), where launching is permissionless. The section 4 protocol table below is corrected accordingly.
 
@@ -163,10 +163,11 @@ The Pools adapter can enter development only when all of the following exist:
 Start with one package and subpath exports:
 
 ```text
-@nexus/launch
-@nexus/launch/flap
-@nexus/launch/pons
-@nexus/launch/chains
+clinexus
+clinexus/flap
+clinexus/pons
+clinexus/chains
+clinexus/mcp
 nexus                         # executable exposed by the package
 ```
 
@@ -179,8 +180,8 @@ The package executable is a thin shell over the same exported functions. It must
 ### Core workflow
 
 ```ts
-import { prepareLaunch, simulateLaunch, sendLaunch, verifyLaunch } from "@nexus/launch";
-import { pons } from "@nexus/launch/pons";
+import { prepareLaunch, simulateLaunch, sendLaunch, verifyLaunch } from "clinexus";
+import { pons } from "clinexus/pons";
 
 const plan = await prepareLaunch({
   adapter: pons(),
@@ -681,8 +682,8 @@ Complete this table before implementation begins.
 | v0.1 adapters | Flap standard + Pons V2 | Flap Standard + Pons V2 |
 | Superseded Pons deployment | Read-only; never a launch target | Recorded |
 | Pools | Block until official integration surface | Deferred |
-| Package structure | One package with subpath exports | `nexus-launch` with core, chain, Flap, Pons, and Node metadata subpaths |
-| Terminal interface | Thin `nexus` executable over the library, with stable JSON output | `nexus` and `nexus-cli` binaries |
+| Package structure | One package with subpath exports | `clinexus` with core, chain, Flap, Pons, Node metadata, and MCP subpaths |
+| Terminal interface | Thin `nexus` executable over the library, with stable JSON output | `nexus`, `clinexus`, and `nexus-mcp` binaries |
 | Web3 dependency | Caller-supplied `viem` clients | `viem` peer dependency |
 | Signing | Injected wallet only; no keys | SDK `WalletClient`; CLI WalletConnect |
 | Send helper | Thin optional wrapper; raw transaction always exposed | Implemented |
@@ -691,7 +692,7 @@ Complete this table before implementation begins.
 | Deployment integrity | Address + runtime hash + live config pinned to plan | Implemented with critical dependency hashes |
 | Automatic retry | Never after broadcast | Implemented |
 | License | Decide before package publication | MIT |
-| npm name/scope | Verify availability before scaffolding | `nexus-launch` available; `nexus-cli` unavailable |
+| npm name/scope | Verify availability before scaffolding | `clinexus` available; `nexus-cli` and `cli-nexus` unavailable |
 
 Reviewer: Product owner  
 Decision date: 2026-08-06  
