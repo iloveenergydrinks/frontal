@@ -12,6 +12,7 @@ import {
   type Hash,
 } from "viem";
 
+import { startChat } from "./agent.js";
 import {
   adapterFor,
   chainFor,
@@ -213,7 +214,26 @@ program
   .name("nexus")
   .description("Guarded EVM token launch planning, simulation, execution, and verification")
   .version("0.1.0")
-  .option("--json", "emit the stable Nexus JSON envelope");
+  .option("--json", "emit the stable Nexus JSON envelope")
+  .action(async function (this: Command) {
+    // No subcommand: the conversational agent is the front door.
+    try {
+      await startChat();
+    } catch (error) {
+      failure(error);
+    }
+  });
+
+program
+  .command("chat")
+  .description("talk to the Nexus agent; it prepares and simulates, you approve and sign")
+  .action(async function (this: Command) {
+    try {
+      await startChat();
+    } catch (error) {
+      failure(error);
+    }
+  });
 
 program
   .command("adapters")

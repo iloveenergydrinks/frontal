@@ -1,7 +1,7 @@
 {
   "name": "nexus-launch",
-  "version": "0.1.2",
-  "description": "Agent-friendly EVM token launch planning, simulation, execution, and verification, with an MCP server",
+  "version": "0.2.0",
+  "description": "Conversational agent, TypeScript SDK, and MCP server for guarded EVM token launches",
   "type": "module",
   "license": "MIT",
   "homepage": "https://cli.nexus",
@@ -76,11 +76,13 @@
     "viem": "^2.55.11"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@walletconnect/relay-auth": "1.1.0",
     "@walletconnect/universal-provider": "^2.23.10",
     "commander": "^15.0.0",
-    "qrcode-terminal": "^0.12.0"
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
