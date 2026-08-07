@@ -16,10 +16,12 @@ import { startChat } from "./agent.js";
 import {
   adapterFor,
   chainFor,
+  pumpFunConnection,
   publicClientFor,
-  readPlan,
+  readAnyPlan,
   requireAddress,
   rpcUrlFor,
+  writeAnyPlan,
   writePlan,
 } from "./environment.js";
 import { NexusError, toNexusError } from "./errors.js";
@@ -30,6 +32,12 @@ import { startLocalLauncher } from "./local-launcher.js";
 import { encodePlanUrl } from "./plan-url.js";
 import { pons, type PonsLaunchOptions } from "./pons.js";
 import { ponsV2, type PonsV2LaunchOptions } from "./pons-v2.js";
+import {
+  pumpFun,
+  simulatePumpFunLaunch,
+  verifyPumpFunLaunch,
+  type PumpFunLaunchPlan,
+} from "./pump-fun.js";
 import { stringifyJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 
@@ -56,6 +64,8 @@ interface CommonPrepareOptions {
 interface PrepareOptions extends CommonPrepareOptions {
   antiFarmerDuration?: string;
   buybackEnabled?: boolean;
+  cashback?: boolean;
+  creator?: string;
   creatorFeeRecipient?: string;
   creatorTaxBps?: string;
   dexId?: string;
@@ -63,9 +73,16 @@ interface PrepareOptions extends CommonPrepareOptions {
   initialBuy?: string;
   launchConfigId?: string;
   metadataCid?: string;
+  metadataUri?: string;
+  mint?: string;
+  mayhemMode?: boolean;
   pairToken?: string;
   salt?: string;
   saltSeed?: string;
+}
+
+function isPumpPlan(plan: LaunchPlan | PumpFunLaunchPlan): plan is PumpFunLaunchPlan {
+  return plan.adapter.id === "pump-fun";
 }
 
 interface PlanFileOptions {
@@ -233,8 +250,8 @@ async function walletConnectFor(plan: LaunchPlan): Promise<{
 
 program
   .name("nexus")
-  .description("Guarded EVM token launch planning, simulation, execution, and verification")
-  .version("0.3.1")
+  .description("Guarded EVM and Pump.fun launch planning, simulation, execution, and verification")
+  .version("0.4.0")
   .option("--json", "emit the stable Nexus JSON envelope")
   .action(async function (this: Command) {
     // No subcommand: the conversational agent is the front door.
@@ -261,12 +278,23 @@ program
   .description("list supported launch adapters and capabilities")
   .action(function (this: Command) {
     try {
-      const adapters = [flapStandard(), pons(), ponsV2()].map((adapter) => ({
-        id: adapter.id,
-        version: adapter.version,
-        chainId: adapter.chainId,
-        capabilities: adapter.capabilities,
-      }));
+      const pump = pumpFun();
+      const adapters = [
+        ...[flapStandard(), pons(), ponsV2()].map((adapter) => ({
+          id: adapter.id,
+          version: adapter.version,
+          chainFamily: "evm",
+          chainId: adapter.chainId,
+          capabilities: adapter.capabilities,
+        })),
+        {
+          id: pump.id,
+          version: pump.version,
+          chainFamily: pump.chainFamily,
+          cluster: pump.cluster,
+          capabilities: pump.capabilities,
+        },
+      ];
       success(adapters, this);
     } catch (error) {
       failure(error);
@@ -313,8 +341,8 @@ const launch = program.command("launch").description("guarded launch workflow");
 launch
   .command("prepare")
   .description("prepare a content-addressed launch plan without signing")
-  .requiredOption("--adapter <id>", "flap-standard, pons (V1), or pons-v2")
-  .requiredOption("--account <address>", "exact launch wallet")
+  .requiredOption("--adapter <id>", "flap-standard, pons (V1), pons-v2, or pump-fun")
+  .requiredOption("--account <address>", "exact launch wallet; Solana payer for pump-fun")
   .requiredOption("--name <name>", "token name")
   .requiredOption("--symbol <symbol>", "token symbol")
   .option("--description <text>", "token description")
@@ -325,6 +353,11 @@ launch
   .option("--discord <url>", "Discord HTTPS URL")
   .option("--farcaster <url>", "Farcaster HTTPS URL")
   .option("--metadata-cid <cid>", "bare Flap metadata CID")
+  .option("--metadata-uri <uri>", "Pump token metadata JSON URI")
+  .option("--mint <public-key>", "Pump ephemeral mint public key; keep its secret out of the plan")
+  .option("--creator <public-key>", "Pump creator public key; defaults to the payer")
+  .option("--mayhem-mode", "enable Pump mayhem mode")
+  .option("--cashback", "enable Pump cashback mode")
   .option("--salt <bytes32>", "explicit CREATE2 salt")
   .option("--salt-seed <seed>", "deterministic salt-search seed")
   .option("--anti-farmer-duration <seconds>", "Flap anti-farmer duration", "0")
@@ -340,6 +373,35 @@ launch
   .option("--force", "replace an existing output file")
   .action(async function (this: Command, options: PrepareOptions) {
     try {
+      if (options.adapter === "pump-fun") {
+        if (options.mint === undefined || options.metadataUri === undefined) {
+          throw new NexusError("INVALID_ARGUMENT", "pump-fun requires --mint and --metadata-uri.");
+        }
+        const plan = await pumpFun().prepare({
+          connection: pumpFunConnection(),
+          payer: options.account,
+          creator: options.creator ?? options.account,
+          token: metadataFrom(options),
+          launch: {
+            mint: options.mint,
+            metadataUri: options.metadataUri,
+            mayhemMode: options.mayhemMode ?? false,
+            cashback: options.cashback ?? false,
+            ...(options.initialBuy === undefined ? {} : { initialBuy: options.initialBuy }),
+          },
+        });
+        await writeAnyPlan(options.out, plan, options.force ?? false);
+        success(
+          {
+            plan,
+            savedTo: options.out,
+            execution:
+              "Use sendPumpFunLaunch from nexus-launch/pump-fun with the matching in-memory mint signer and a Solana wallet.",
+          },
+          this,
+        );
+        return;
+      }
       const account = requireAddress(options.account, "account");
       const adapter = adapterFor(options.adapter);
       const plan = await prepareLaunch({
@@ -362,7 +424,12 @@ launch
   .requiredOption("--plan <path>", "saved plan JSON")
   .action(async function (this: Command, options: PlanFileOptions) {
     try {
-      const plan = await readPlan(options.plan);
+      const plan = await readAnyPlan(options.plan);
+      if (isPumpPlan(plan)) {
+        const simulation = await simulatePumpFunLaunch(pumpFunConnection(), plan);
+        success({ plan, simulation }, this);
+        return;
+      }
       const adapter = adapterFor(plan.adapter.id);
       const simulation = await simulateLaunch({
         adapter,
@@ -384,7 +451,13 @@ launch
   .action(async function (this: Command, options: ServeOptions) {
     let local: Awaited<ReturnType<typeof startLocalLauncher>> | undefined;
     try {
-      const plan = await readPlan(options.plan);
+      const plan = await readAnyPlan(options.plan);
+      if (isPumpPlan(plan)) {
+        throw new NexusError(
+          "UNSUPPORTED_CAPABILITY",
+          "The localhost EVM signing page cannot execute Pump plans because Pump also requires an ephemeral mint signer. Use the SDK with that signer kept in application memory.",
+        );
+      }
       if (options.approve.toLowerCase() !== plan.id.toLowerCase()) {
         throw new NexusError(
           "INVALID_PLAN",
@@ -431,7 +504,13 @@ launch
     let provider: UniversalProvider | undefined;
     let transactionHash: Hash | undefined;
     try {
-      const plan = await readPlan(options.plan);
+      const plan = await readAnyPlan(options.plan);
+      if (isPumpPlan(plan)) {
+        throw new NexusError(
+          "UNSUPPORTED_CAPABILITY",
+          "WalletConnect EVM execution cannot execute Pump plans. Use sendPumpFunLaunch with a Solana wallet and the matching in-memory mint signer.",
+        );
+      }
       if (options.approve.toLowerCase() !== plan.id.toLowerCase()) {
         throw new NexusError(
           "INVALID_PLAN",
@@ -488,7 +567,13 @@ launch
   .option("--base-url <url>", "https base URL of the signing page", "https://cli.nexus/")
   .action(async function (this: Command, options: PlanFileOptions & { baseUrl: string }) {
     try {
-      const plan = await readPlan(options.plan);
+      const plan = await readAnyPlan(options.plan);
+      if (isPumpPlan(plan)) {
+        throw new NexusError(
+          "UNSUPPORTED_CAPABILITY",
+          "The hosted EVM signing page cannot carry Pump's ephemeral mint signer. Review this plan locally and execute through the Pump SDK integration.",
+        );
+      }
       const url = await encodePlanUrl(plan, options.baseUrl);
       success(
         {
@@ -512,10 +597,15 @@ launch
   .requiredOption("--tx <hash>", "transaction hash")
   .action(async function (this: Command, options: PlanFileOptions & { tx: string }) {
     try {
+      const plan = await readAnyPlan(options.plan);
+      if (isPumpPlan(plan)) {
+        const result = await verifyPumpFunLaunch(pumpFunConnection(), plan, options.tx);
+        success(result, this);
+        return;
+      }
       if (!/^0x[0-9a-fA-F]{64}$/u.test(options.tx)) {
         throw new NexusError("INVALID_ARGUMENT", "--tx must be a 32-byte transaction hash.");
       }
-      const plan = await readPlan(options.plan);
       const adapter = adapterFor(plan.adapter.id);
       const result = await verifyLaunch({
         adapter,

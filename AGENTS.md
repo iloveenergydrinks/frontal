@@ -1,7 +1,7 @@
 # Nexus for agents
 
 Nexus prepares, simulates, and verifies token launches on existing EVM launch
-protocols. You can do all of that autonomously. You cannot launch a token, and
+protocols and Pump.fun on Solana. You can do all of that autonomously. You cannot launch a token, and
 neither can Nexus — broadcasting requires a human approving one exact plan and
 signing in a wallet Nexus never holds a key for.
 
@@ -45,7 +45,8 @@ returns the exact command for the human to run.
    should even ask for. Flap is a bonding curve on BNB that migrates to
    PancakeSwap; Pons V1 is fixed supply seeded straight into locked Uniswap V3;
    Pons V2 starts on a bonding curve and graduates into permanently locked
-   Uniswap V4. `capabilities.initialBuy` is currently `unsupported` for all
+   Uniswap V4; Pump.fun uses Solana `create_v2`, an external metadata URI, and
+   an application-generated ephemeral mint public key. `capabilities.initialBuy` is currently `unsupported` for all
    adapters. Do not offer a control the selected adapter does not support.
 
 2. **Collect metadata from the human.** Never invent a token name, symbol,
@@ -55,7 +56,8 @@ returns the exact command for the human to run.
 3. **Upload metadata if the adapter needs it.** `flap-standard` requires an IPFS
    CID, so `upload_flap_metadata` must run first with a 512x512 PNG. It publishes
    the image publicly and cannot be undone, so confirm before calling it. `pons`
-   and `pons-v2` store the profile URI onchain and need no upload.
+   and `pons-v2` store the profile URI onchain and need no upload. Pump requires
+   a public HTTPS, IPFS, or Arweave metadata JSON URI; never use a private frontend endpoint.
 
 4. **`prepare_launch`.** Signer-free; it cannot broadcast. Save the plan to a
    path the human can see.
@@ -79,7 +81,10 @@ returns the exact command for the human to run.
    a hosted signing page and that link works for someone with no local checkout.
    When you give them a link, tell them the plan ID it must display — a page
    showing a different ID means the link was altered, and they should not sign.
-   They approve the plan ID and sign in their own wallet.
+   They approve the plan ID and sign in their own wallet. Pump is different:
+   the application calls `sendPumpFunLaunch` with the approved plan, the Solana
+   wallet, and the matching mint signer held only in memory. Never request that
+   signer, place it in a plan, or send a Pump plan to the EVM signing page.
 
 8. **`verify_launch`** once they give you a transaction hash. Report what it
    returns. Do not describe a launch as successful before this passes.
@@ -112,6 +117,6 @@ Errors carry stable codes. The ones that change your behavior:
   argument, a plan file, a log, or your own output. Nexus reads credentials from
   the environment only.
 - Do not edit a plan file by hand. Prepare a new one.
-- Do not present Nexus, Flap, or Pons as audited. They are not.
+- Do not present Nexus, Flap, Pons, or Pump.fun as audited. They are not.
 - Do not describe a token launch as an investment, and do not predict what a
   token will be worth. Launches are permanent and can lose all value.

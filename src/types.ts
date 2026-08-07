@@ -41,7 +41,7 @@ export interface LaunchCapabilities {
   creatorFees: boolean;
   deterministicTokenAddress: boolean;
   initialBuy: "optional" | "required" | "unsupported";
-  metadataStorage: readonly ("https" | "ipfs" | "onchain")[];
+  metadataStorage: readonly ("https" | "ipfs" | "arweave" | "onchain")[];
   pricingModel: "bonding-curve" | "fixed-liquidity";
   taxToken: boolean;
 }

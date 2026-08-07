@@ -9,18 +9,25 @@ import type { Hash } from "viem";
 
 import {
   adapterFor,
+  pumpFunConnection,
   publicClientFor,
-  readPlan,
+  readAnyPlan,
   requireAddress,
-  writePlan,
+  writeAnyPlan,
 } from "./environment.js";
-import { toNexusError } from "./errors.js";
+import { NexusError, toNexusError } from "./errors.js";
 import { uploadFlapMetadata } from "./flap-metadata.js";
 import { flapStandard } from "./flap.js";
 import { prepareLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
 import { encodePlanUrl } from "./plan-url.js";
 import { pons } from "./pons.js";
 import { ponsV2 } from "./pons-v2.js";
+import {
+  pumpFun,
+  simulatePumpFunLaunch,
+  verifyPumpFunLaunch,
+  type PumpFunLaunchPlan,
+} from "./pump-fun.js";
 import { canonicalJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 
@@ -36,7 +43,7 @@ import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
  */
 
 const SERVER_NAME = "nexus-launch";
-const SERVER_VERSION = "0.1.2";
+const SERVER_VERSION = "0.4.0";
 
 /** Where an operator hosts the signing page. Override with NEXUS_SIGNING_URL. */
 const DEFAULT_SIGNING_URL = "https://cli.nexus/";
@@ -100,7 +107,26 @@ function metadataFrom(input: TokenInput): TokenMetadata {
 }
 
 /** The review surface a human needs before approving a plan ID. */
-function planDigest(plan: LaunchPlan): Record<string, unknown> {
+function isPumpPlan(plan: LaunchPlan | PumpFunLaunchPlan): plan is PumpFunLaunchPlan {
+  return plan.adapter.id === "pump-fun";
+}
+
+function planDigest(plan: LaunchPlan | PumpFunLaunchPlan): Record<string, unknown> {
+  if (isPumpPlan(plan)) {
+    return {
+      planId: plan.id,
+      adapter: plan.adapter.id,
+      chainFamily: plan.chainFamily,
+      cluster: plan.cluster,
+      payer: plan.payer,
+      creator: plan.creator,
+      deployment: plan.deployment,
+      expected: plan.expected,
+      preparedAt: plan.preparedAt,
+      summary: plan.summary,
+      warnings: plan.warnings,
+    };
+  }
   return {
     planId: plan.id,
     adapter: plan.adapter.id,
@@ -116,9 +142,18 @@ function planDigest(plan: LaunchPlan): Record<string, unknown> {
 }
 
 async function executionInstructions(
-  plan: LaunchPlan,
+  plan: LaunchPlan | PumpFunLaunchPlan,
   planPath: string,
 ): Promise<Record<string, unknown>> {
+  if (isPumpPlan(plan)) {
+    return {
+      approvalRequired: true,
+      planId: plan.id,
+      note:
+        "Pump execution is an application action: call sendPumpFunLaunch with this exact plan, a Solana wallet, and the matching ephemeral mint signer kept only in memory. The hosted EVM signing page is incompatible.",
+      afterBroadcast: `nexus launch verify --plan ${planPath} --tx <solana-signature>`,
+    };
+  }
   const instructions: Record<string, unknown> = {
     approvalRequired: true,
     planId: plan.id,
@@ -158,12 +193,22 @@ server.registerTool(
   () => {
     try {
       return ok(
-        [flapStandard(), pons(), ponsV2()].map((adapter) => ({
-          id: adapter.id,
-          version: adapter.version,
-          chainId: adapter.chainId,
-          capabilities: adapter.capabilities,
-        })),
+        [
+          ...[flapStandard(), pons(), ponsV2()].map((adapter) => ({
+            id: adapter.id,
+            version: adapter.version,
+            chainFamily: "evm",
+            chainId: adapter.chainId,
+            capabilities: adapter.capabilities,
+          })),
+          {
+            id: pumpFun().id,
+            version: pumpFun().version,
+            chainFamily: pumpFun().chainFamily,
+            cluster: pumpFun().cluster,
+            capabilities: pumpFun().capabilities,
+          },
+        ],
       );
     } catch (error) {
       return fail(error);
@@ -180,12 +225,17 @@ server.registerTool(
     inputSchema: {
       ...tokenShape,
       account: z.string().describe("Exact launch wallet. Nexus never holds its key."),
-      adapter: z.enum(["flap-standard", "pons", "pons-v2"]),
+      adapter: z.enum(["flap-standard", "pons", "pons-v2", "pump-fun"]),
       buybackEnabled: z.boolean().optional().describe("Enable Pons V2 creator buybacks."),
       creatorFeeRecipient: z.string().optional().describe("Pons V2 creator fee recipient."),
       creatorTaxBps: z.number().int().min(0).max(10_000).optional().describe("Pons V2 creator tax in basis points."),
       dexId: z.number().int().nonnegative().optional().describe("Pons V1 DEX configuration. Default 0."),
       feeWallet: z.string().optional().describe("Pons V1 creator fee recipient."),
+      creator: z.string().optional().describe("Pump creator public key. Defaults to the payer."),
+      mint: z.string().optional().describe("Pump ephemeral mint public key. Never provide its secret."),
+      metadataUri: z.string().optional().describe("Pump metadata JSON URI. HTTPS, IPFS, or Arweave."),
+      mayhemMode: z.boolean().optional().describe("Enable Pump mayhem mode."),
+      cashback: z.boolean().optional().describe("Enable Pump cashback mode."),
       force: z.boolean().optional().describe("Replace an existing plan file."),
       initialBuy: z
         .string()
@@ -199,6 +249,30 @@ server.registerTool(
   },
   async (input) => {
     try {
+      if (input.adapter === "pump-fun") {
+        if (input.mint === undefined || input.metadataUri === undefined) {
+          throw new NexusError("INVALID_ARGUMENT", "pump-fun requires mint and metadataUri.");
+        }
+        const plan = await pumpFun().prepare({
+          connection: pumpFunConnection(),
+          payer: input.account,
+          creator: input.creator ?? input.account,
+          token: metadataFrom(input),
+          launch: {
+            mint: input.mint,
+            metadataUri: input.metadataUri,
+            mayhemMode: input.mayhemMode ?? false,
+            cashback: input.cashback ?? false,
+            ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
+          },
+        });
+        await writeAnyPlan(input.out, plan, input.force ?? false);
+        return ok({
+          ...planDigest(plan),
+          planPath: input.out,
+          nextStep: "Call simulate_launch, review the exact plan ID, then execute in an application holding the matching mint signer only in memory.",
+        });
+      }
       const account = requireAddress(input.account, "account");
       const adapter = adapterFor(input.adapter);
       const launch = input.adapter === "flap-standard"
@@ -234,7 +308,7 @@ server.registerTool(
         publicClient: publicClientFor(adapter.chainId),
         token: metadataFrom(input),
       });
-      await writePlan(input.out, plan, input.force ?? false);
+      await writeAnyPlan(input.out, plan, input.force ?? false);
       return ok({
         ...planDigest(plan),
         planPath: input.out,
@@ -256,7 +330,17 @@ server.registerTool(
   },
   async (input) => {
     try {
-      const plan = await readPlan(input.plan);
+      const plan = await readAnyPlan(input.plan);
+      if (isPumpPlan(plan)) {
+        const simulation = await simulatePumpFunLaunch(pumpFunConnection(), plan);
+        return ok({
+          simulation,
+          planId: plan.id,
+          summary: plan.summary,
+          warnings: plan.warnings,
+          execution: await executionInstructions(plan, input.plan),
+        });
+      }
       const adapter = adapterFor(plan.adapter.id);
       const simulation = await simulateLaunch({
         adapter,
@@ -286,7 +370,7 @@ server.registerTool(
   },
   async (input) => {
     try {
-      const plan = await readPlan(input.plan);
+      const plan = await readAnyPlan(input.plan);
       return ok(await executionInstructions(plan, input.plan));
     } catch (error) {
       return fail(error);
@@ -307,7 +391,10 @@ server.registerTool(
   },
   async (input) => {
     try {
-      const plan = await readPlan(input.plan);
+      const plan = await readAnyPlan(input.plan);
+      if (isPumpPlan(plan)) {
+        return ok(await verifyPumpFunLaunch(pumpFunConnection(), plan, input.tx));
+      }
       const adapter = adapterFor(plan.adapter.id);
       const result = await verifyLaunch({
         adapter,

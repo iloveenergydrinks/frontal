@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cli.nexus/schemas/pump-fun-launch-plan.schema.json",
+  "title": "Nexus Pump.fun launch plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "adapter", "chainFamily", "cluster", "payer", "creator", "deployment", "preparedAt", "request", "snapshot", "instructions", "expected", "summary", "warnings", "id"],
+  "properties": {
+    "schemaVersion": { "const": "1" },
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "sdkVersion"],
+      "properties": {
+        "id": { "const": "pump-fun" },
+        "version": { "const": "0.1.0" },
+        "sdkVersion": { "const": "1.36.0" }
+      }
+    },
+    "chainFamily": { "const": "solana" },
+    "cluster": { "const": "mainnet-beta" },
+    "payer": { "$ref": "#/$defs/publicKey" },
+    "creator": { "$ref": "#/$defs/publicKey" },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["programId", "owner", "programAccountHash", "programData"],
+      "properties": {
+        "programId": { "$ref": "#/$defs/publicKey" },
+        "owner": { "$ref": "#/$defs/publicKey" },
+        "programAccountHash": { "$ref": "#/$defs/sha256" },
+        "programData": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["address", "deploymentSlot", "reviewedDataHash", "upgradeAuthority"],
+          "properties": {
+            "address": { "$ref": "#/$defs/publicKey" },
+            "deploymentSlot": { "$ref": "#/$defs/decimal" },
+            "reviewedDataHash": { "$ref": "#/$defs/sha256" },
+            "upgradeAuthority": { "$ref": "#/$defs/publicKey" }
+          }
+        }
+      }
+    },
+    "preparedAt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot"],
+      "properties": { "slot": { "$ref": "#/$defs/decimal" } }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "launch"],
+      "properties": {
+        "token": { "type": "object" },
+        "launch": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mint", "metadataUri", "mayhemMode", "cashback", "initialBuy"],
+          "properties": {
+            "mint": { "$ref": "#/$defs/publicKey" },
+            "metadataUri": { "type": "string", "minLength": 1, "maxLength": 200 },
+            "mayhemMode": { "type": "boolean" },
+            "cashback": { "type": "boolean" },
+            "initialBuy": { "const": "0" }
+          }
+        }
+      }
+    },
+    "snapshot": { "type": "object" },
+    "instructions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["programId", "accounts", "data"],
+        "properties": {
+          "programId": { "$ref": "#/$defs/publicKey" },
+          "accounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["publicKey", "isSigner", "isWritable"],
+              "properties": {
+                "publicKey": { "$ref": "#/$defs/publicKey" },
+                "isSigner": { "type": "boolean" },
+                "isWritable": { "type": "boolean" }
+              }
+            }
+          },
+          "data": { "type": "string", "contentEncoding": "base64" }
+        }
+      }
+    },
+    "expected": { "type": "object" },
+    "summary": { "type": "object" },
+    "warnings": { "type": "array" },
+    "id": { "type": "string", "pattern": "^0x[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "decimal": { "type": "string", "pattern": "^(0|[1-9][0-9]*)$" },
+    "publicKey": { "type": "string", "minLength": 32, "maxLength": 44 },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

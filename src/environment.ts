@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import process from "node:process";
 
+import { Connection } from "@solana/web3.js";
 import { createPublicClient, getAddress, http, isAddress, type Address, type Chain, type PublicClient } from "viem";
 
 import { bnbSmartChain, robinhoodChain } from "./chains.js";
@@ -9,6 +10,7 @@ import { flapStandard } from "./flap.js";
 import { parseLaunchPlan } from "./launch.js";
 import { pons } from "./pons.js";
 import { ponsV2 } from "./pons-v2.js";
+import { parsePumpFunLaunchPlan, type PumpFunLaunchPlan } from "./pump-fun.js";
 import { stringifyJson } from "./serialization.js";
 import type { LaunchAdapter, LaunchPlan } from "./types.js";
 
@@ -44,6 +46,10 @@ export function publicClientFor(chainId: number): PublicClient {
   return createPublicClient({ chain, transport: http(rpcUrlFor(chainId)) }) as PublicClient;
 }
 
+export function pumpFunConnection(): Connection {
+  return new Connection(process.env.NEXUS_SOLANA_RPC_URL ?? "https://api.mainnet-beta.solana.com", "confirmed");
+}
+
 export function adapterFor(id: string): LaunchAdapter<unknown> {
   if (id === "flap-standard") return flapStandard() as LaunchAdapter<unknown>;
   if (id === "pons") return pons() as LaunchAdapter<unknown>;
@@ -58,7 +64,49 @@ export async function readPlan(path: string): Promise<LaunchPlan> {
   return parseLaunchPlan(contents);
 }
 
+export async function readAnyPlan(path: string): Promise<LaunchPlan | PumpFunLaunchPlan> {
+  const contents = await readFile(path, "utf8").catch((cause: unknown) => {
+    throw new NexusError("INVALID_PLAN", `Unable to read plan ${path}.`, { cause });
+  });
+  let candidate: unknown;
+  try {
+    candidate = JSON.parse(contents);
+  } catch (cause) {
+    throw new NexusError("INVALID_PLAN", "Plan file is not valid JSON.", { cause });
+  }
+  if (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    "adapter" in candidate &&
+    typeof candidate.adapter === "object" &&
+    candidate.adapter !== null &&
+    "id" in candidate.adapter &&
+    candidate.adapter.id === "pump-fun"
+  ) {
+    return parsePumpFunLaunchPlan(contents);
+  }
+  return parseLaunchPlan(contents);
+}
+
 export async function writePlan(path: string, plan: LaunchPlan, force: boolean): Promise<void> {
+  await writeFile(path, `${stringifyJson(plan)}\n`, {
+    encoding: "utf8",
+    flag: force ? "w" : "wx",
+    mode: 0o600,
+  }).catch((cause: unknown) => {
+    throw new NexusError(
+      "INVALID_ARGUMENT",
+      `Unable to write ${path}${force ? "." : "; use force to replace an existing file."}`,
+      { cause },
+    );
+  });
+}
+
+export async function writeAnyPlan(
+  path: string,
+  plan: LaunchPlan | PumpFunLaunchPlan,
+  force: boolean,
+): Promise<void> {
   await writeFile(path, `${stringifyJson(plan)}\n`, {
     encoding: "utf8",
     flag: force ? "w" : "wx",

@@ -5,14 +5,27 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
-import { adapterFor, publicClientFor, readPlan, requireAddress, writePlan } from "./environment.js";
-import { toNexusError } from "./errors.js";
+import {
+  adapterFor,
+  publicClientFor,
+  pumpFunConnection,
+  readAnyPlan,
+  requireAddress,
+  writeAnyPlan,
+} from "./environment.js";
+import { NexusError, toNexusError } from "./errors.js";
 import { uploadFlapMetadata } from "./flap-metadata.js";
 import { flapStandard } from "./flap.js";
 import { prepareLaunch, simulateLaunch, verifyLaunch } from "./launch.js";
 import { encodePlanUrl } from "./plan-url.js";
 import { pons } from "./pons.js";
 import { ponsV2 } from "./pons-v2.js";
+import {
+  pumpFun,
+  simulatePumpFunLaunch,
+  verifyPumpFunLaunch,
+  type PumpFunLaunchPlan,
+} from "./pump-fun.js";
 import { canonicalJson } from "./serialization.js";
 import type { LaunchPlan, SocialLinks, TokenMetadata } from "./types.js";
 import type { Hash } from "viem";
@@ -33,7 +46,7 @@ const SIGNING_URL = process.env.NEXUS_SIGNING_URL ?? "https://cli.nexus/";
 /** Where to relay model traffic when the user has no Anthropic credential. */
 const RELAY_URL = process.env.NEXUS_RELAY_URL ?? "https://cli.nexus";
 
-const SYSTEM = `You are Nexus, a terminal agent that walks someone through launching a token on an EVM chain.
+const SYSTEM = `You are Nexus, a terminal agent that walks someone through guarded token launch preparation on EVM chains and Pump.fun on Solana.
 
 You prepare, simulate, and explain launches. You cannot launch one, and neither can Nexus: broadcasting requires a human approving one exact plan ID and signing in their own wallet. You have no tool that sends a transaction, by design. Do not look for one, and never imply you performed a launch.
 
@@ -45,12 +58,12 @@ A plan ID is an approval token. \`prepare_launch\` hashes the exact factory, cal
 
 ## Workflow
 
-1. Call list_adapters first. The protocols differ in ways that change what you should even ask for. Flap is a bonding curve on BNB that migrates to PancakeSwap. Pons V1 is fixed supply on Robinhood Chain and seeds a locked Uniswap V3 pool immediately. Pons V2 starts on a bonding curve and graduates into permanently locked Uniswap V4 liquidity. Nexus does not offer an initial buy on any adapter until it can bind a nonzero minimum output. Do not offer a control the chosen adapter does not have.
+1. Call list_adapters first. The protocols differ in ways that change what you should even ask for. Flap is a bonding curve on BNB that migrates to PancakeSwap. Pons V1 is fixed supply on Robinhood Chain and seeds a locked Uniswap V3 pool immediately. Pons V2 starts on a bonding curve and graduates into permanently locked Uniswap V4 liquidity. Pump.fun uses create_v2 on Solana and needs a caller-generated ephemeral mint public key plus an external metadata JSON URI. Nexus does not offer an initial buy on any adapter until it can bind a nonzero minimum output. Do not offer a control the chosen adapter does not have.
 2. Ask the human for the name, symbol, description, image, and links. Never invent them, and never search their filesystem for an image — use only a path they gave you.
 3. flap-standard needs an IPFS metadata CID, so upload_flap_metadata must run first with a 512x512 PNG. That publishes the image publicly and cannot be undone: confirm before calling it. Both Pons adapters store the profile URI onchain and need no upload.
 4. prepare_launch, then simulate_launch. Simulation rebuilds the plan from live chain state and compares every field, so a plan that no longer matches reality fails there rather than at signing. Always simulate before presenting anything for approval.
 5. Present the plan: the plan ID, chain, account, protocol and its address, the token name and symbol, the predicted token address, the transaction value, the funding line including any shortfall, and every warning in full. Never summarise away a warning about an unprotected buy, a permanent lock, or an upgradeable protocol.
-6. Give them the signing link from get_signing_link, tell them the plan ID the page must display, and stop. A page showing a different ID means the link was altered and they should not sign.
+6. For EVM, give them the signing link from get_signing_link, tell them the plan ID the page must display, and stop. For Pump, explain that the calling application executes with sendPumpFunLaunch, its Solana wallet, and the in-memory mint signer matching the committed public key. Never request or store that mint secret, and never send a Pump plan to the EVM signing page.
 7. When they give you a transaction hash, call verify_launch and report what it returns. Do not describe a launch as successful before that passes.
 
 ## Funding
@@ -170,7 +183,25 @@ function metadataFrom(input: TokenInput): TokenMetadata {
   };
 }
 
-function digest(plan: LaunchPlan): Record<string, unknown> {
+function isPumpPlan(plan: LaunchPlan | PumpFunLaunchPlan): plan is PumpFunLaunchPlan {
+  return plan.adapter.id === "pump-fun";
+}
+
+function digest(plan: LaunchPlan | PumpFunLaunchPlan): Record<string, unknown> {
+  if (isPumpPlan(plan)) {
+    return {
+      planId: plan.id,
+      adapter: plan.adapter.id,
+      chainFamily: plan.chainFamily,
+      cluster: plan.cluster,
+      payer: plan.payer,
+      creator: plan.creator,
+      deployment: plan.deployment,
+      expected: plan.expected,
+      summary: plan.summary,
+      warnings: plan.warnings,
+    };
+  }
   return {
     planId: plan.id,
     adapter: plan.adapter.id,
@@ -212,11 +243,20 @@ const listAdapters = betaZodTool({
   run: () => {
     try {
       return report(
-        [flapStandard(), pons(), ponsV2()].map((adapter) => ({
-          id: adapter.id,
-          chainId: adapter.chainId,
-          capabilities: adapter.capabilities,
-        })),
+        [
+          ...[flapStandard(), pons(), ponsV2()].map((adapter) => ({
+            id: adapter.id,
+            chainFamily: "evm",
+            chainId: adapter.chainId,
+            capabilities: adapter.capabilities,
+          })),
+          {
+            id: pumpFun().id,
+            chainFamily: pumpFun().chainFamily,
+            cluster: pumpFun().cluster,
+            capabilities: pumpFun().capabilities,
+          },
+        ],
       );
     } catch (error) {
       return failed(error);
@@ -231,11 +271,16 @@ const prepareLaunchTool = betaZodTool({
   inputSchema: z.object({
     ...tokenShape,
     account: z.string().describe("Exact launch wallet. Nexus never holds its key."),
-    adapter: z.enum(["flap-standard", "pons", "pons-v2"]),
+    adapter: z.enum(["flap-standard", "pons", "pons-v2", "pump-fun"]),
     buybackEnabled: z.boolean().optional().describe("Enable Pons V2 creator buybacks."),
     creatorFeeRecipient: z.string().optional().describe("Pons V2 creator fee recipient."),
     creatorTaxBps: z.number().int().min(0).max(10_000).optional().describe("Pons V2 creator tax in basis points."),
     feeWallet: z.string().optional().describe("Pons V1 creator fee recipient."),
+    creator: z.string().optional().describe("Pump creator public key. Defaults to the payer."),
+    mint: z.string().optional().describe("Pump ephemeral mint public key. Never provide its secret."),
+    metadataUri: z.string().optional().describe("Pump metadata JSON URI. HTTPS, IPFS, or Arweave."),
+    mayhemMode: z.boolean().optional().describe("Enable Pump mayhem mode."),
+    cashback: z.boolean().optional().describe("Enable Pump cashback mode."),
     initialBuy: z
       .string()
       .optional()
@@ -245,6 +290,30 @@ const prepareLaunchTool = betaZodTool({
   }),
   run: async (input) => {
     try {
+      if (input.adapter === "pump-fun") {
+        if (input.mint === undefined || input.metadataUri === undefined) {
+          throw new NexusError("INVALID_ARGUMENT", "pump-fun requires mint and metadataUri.");
+        }
+        const plan = await pumpFun().prepare({
+          connection: pumpFunConnection(),
+          payer: input.account,
+          creator: input.creator ?? input.account,
+          token: metadataFrom(input),
+          launch: {
+            mint: input.mint,
+            metadataUri: input.metadataUri,
+            mayhemMode: input.mayhemMode ?? false,
+            cashback: input.cashback ?? false,
+            ...(input.initialBuy === undefined ? {} : { initialBuy: input.initialBuy }),
+          },
+        });
+        await writeAnyPlan(input.out, plan, true);
+        return report({
+          ...digest(plan),
+          planPath: input.out,
+          nextStep: "Call simulate_launch, review the exact plan ID, then execute in an application holding the matching mint signer only in memory.",
+        });
+      }
       const account = requireAddress(input.account, "account");
       const adapter = adapterFor(input.adapter);
       const launch = input.adapter === "flap-standard"
@@ -274,7 +343,7 @@ const prepareLaunchTool = betaZodTool({
         publicClient: publicClientFor(adapter.chainId),
         token: metadataFrom(input),
       });
-      await writePlan(input.out, plan, true);
+      await writeAnyPlan(input.out, plan, true);
       return report({ ...digest(plan), planPath: input.out });
     } catch (error) {
       return failed(error);
@@ -289,7 +358,11 @@ const simulateLaunchTool = betaZodTool({
   inputSchema: z.object({ plan: z.string().describe("Path to a saved plan file.") }),
   run: async (input) => {
     try {
-      const plan = await readPlan(input.plan);
+      const plan = await readAnyPlan(input.plan);
+      if (isPumpPlan(plan)) {
+        const simulation = await simulatePumpFunLaunch(pumpFunConnection(), plan);
+        return report({ simulation, planId: plan.id, summary: plan.summary, warnings: plan.warnings });
+      }
       const simulation = await simulateLaunch({
         adapter: adapterFor(plan.adapter.id),
         plan,
@@ -309,7 +382,14 @@ const signingLink = betaZodTool({
   inputSchema: z.object({ plan: z.string().describe("Path to a saved plan file.") }),
   run: async (input) => {
     try {
-      const plan = await readPlan(input.plan);
+      const plan = await readAnyPlan(input.plan);
+      if (isPumpPlan(plan)) {
+        return report({
+          planId: plan.id,
+          note:
+            "Pump plans cannot use the hosted EVM signing page. The application must call sendPumpFunLaunch with the reviewed plan, a Solana wallet, and the matching mint signer held only in memory.",
+        });
+      }
       return report({
         url: await encodePlanUrl(plan, SIGNING_URL),
         planId: plan.id,
@@ -331,7 +411,10 @@ const verifyLaunchTool = betaZodTool({
   }),
   run: async (input) => {
     try {
-      const plan = await readPlan(input.plan);
+      const plan = await readAnyPlan(input.plan);
+      if (isPumpPlan(plan)) {
+        return report(await verifyPumpFunLaunch(pumpFunConnection(), plan, input.tx));
+      }
       const result = await verifyLaunch({
         adapter: adapterFor(plan.adapter.id),
         hash: input.tx as Hash,
@@ -399,7 +482,7 @@ export async function startChat(): Promise<void> {
     process.stdout.write(`${mascot(colour)}\n\n`);
   }
   process.stdout.write(
-    "Nexus — token launches on BNB Smart Chain and Robinhood Chain.\n" +
+    "Nexus — token launches on BNB Smart Chain, Robinhood Chain, and Pump.fun on Solana.\n" +
       "I prepare and simulate a launch; you approve the plan and sign in your own wallet.\n" +
       "Launches are permanent and can lose all value. Nexus is unaudited.\n" +
       "Type your request, or 'exit' to leave.\n\n",

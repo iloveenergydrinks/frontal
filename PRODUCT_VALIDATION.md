@@ -1,13 +1,13 @@
 # Nexus — Product and Developer-UX Validation Brief
 
-> Implementation status (2026-08-07): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-launch` / `nexus-mcp` executables. Flap Standard, Pons V1, and Pons V2 pass full disposable-fork execution and verification. No fork test broadcasts to production.
+> Implementation status (2026-08-07): accepted scope is implemented as `nexus-launch` with `nexus` / `nexus-launch` / `nexus-mcp` executables. Flap Standard, Pons V1, and Pons V2 pass full disposable-fork execution and verification. Pump.fun compatibility is implemented as a separate Solana `create_v2` adapter with a plan-bound ephemeral mint public key. No test broadcasts to production.
 >
 > Correction (2026-08-07): `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB` is the live Pons V1 fixed-liquidity deployment, not Pons V2. Nexus preserves it under adapter ID `pons`. The separate `pons-v2` adapter targets the documented current bonding-curve/V4 factory `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e`; no saved V1 plan is retargeted.
 
 **Status:** Implemented release-candidate validation document  
 **Review date:** 2026-08-06  
-**Product:** An npm library for launching tokens through existing EVM launch protocols  
-**Initial networks:** BNB Smart Chain (`56`) and Robinhood Chain (`4663`)
+**Product:** An npm library for guarded launches through existing EVM protocols and Pump.fun
+**Initial networks:** BNB Smart Chain (`56`), Robinhood Chain (`4663`), and Solana mainnet-beta
 
 This document is the gate before implementation. It defines what Nexus is, what version 0.1 will do, how the developer experience should feel, and the evidence required before release.
 
@@ -133,6 +133,7 @@ A TypeScript developer starting from an empty project should be able to produce 
 | `flapStandard` | BNB `56` | Bonding curve followed by protocol-defined DEX migration | Build | Flap exposes a documented Portal integration surface. Limit the first adapter to standard tokens. |
 | `pons` | Robinhood `4663` | V1 fixed supply seeded as one-sided Uniswap V3 liquidity, locked at launch | Maintain | Preserve the live V1 deployment and saved-plan identity. Unsafe zero-minimum initial buys are rejected. |
 | `pons-v2` | Robinhood `4663` | Constant-product bonding curve graduating into permanently locked Uniswap V4 | Build | Current documented stack; pin economics, policy, dependencies, CREATE2 token and curve, and exact post-launch state. |
+| `pump-fun` | Solana mainnet-beta | Pump `create_v2` Token-2022 mint and bonding curve | Build | Use the official SDK, pin the upgradeable program identity and global-state snapshot, bind the mint public key and exact instruction, and keep the mint secret only in caller memory. |
 | Pons legacy pre-V1 | Robinhood `4663` | Superseded deployment | Read-only | Kept resolvable for historical launches. Nexus never prepares a new launch against it. |
 | `pools` | Robinhood `4663` | Current product labels include Crowd Launch | Blocked | The public product is in beta and no stable public contract registry, ABI, or SDK was identified. Do not productionize a reverse-engineered frontend integration. |
 

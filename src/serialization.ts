@@ -27,7 +27,11 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function hashPlan(plan: Omit<LaunchPlan, "id">): Hash {
-  return keccak256(stringToHex(canonicalJson(plan)));
+  return hashCanonicalPlan(plan);
+}
+
+export function hashCanonicalPlan(value: object): Hash {
+  return keccak256(stringToHex(canonicalJson(value)));
 }
 
 export function assertPlanId(plan: LaunchPlan): void {

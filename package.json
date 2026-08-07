@@ -1,7 +1,7 @@
 {
   "name": "nexus-launch",
-  "version": "0.3.1",
-  "description": "Conversational agent, TypeScript SDK, and MCP server for guarded EVM token launches",
+  "version": "0.4.0",
+  "description": "Conversational agent, TypeScript SDK, and MCP server for guarded EVM and Pump.fun token launches",
   "type": "module",
   "license": "MIT",
   "homepage": "https://cli.nexus",
@@ -46,6 +46,10 @@
       "types": "./dist/pons-v2.d.ts",
       "import": "./dist/pons-v2.js"
     },
+    "./pump-fun": {
+      "types": "./dist/pump-fun.d.ts",
+      "import": "./dist/pump-fun.js"
+    },
     "./mcp": {
       "types": "./dist/mcp.d.ts",
       "import": "./dist/mcp.js"
@@ -72,6 +76,7 @@
     "test": "vitest run",
     "test:fork": "npm run build && node scripts/fork-e2e.mjs",
     "test:mcp": "node scripts/mcp-smoke.mjs",
+    "test:pump:mainnet": "npm run build && node scripts/pump-mainnet-smoke.mjs",
     "test:package": "node scripts/package-smoke.mjs",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -82,6 +87,9 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@pump-fun/pump-sdk": "1.36.0",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.98.4",
     "@walletconnect/relay-auth": "1.1.0",
     "@walletconnect/universal-provider": "^2.23.10",
     "commander": "^15.0.0",
@@ -101,6 +109,8 @@
   },
   "keywords": [
     "evm",
+    "solana",
+    "pump-fun",
     "token-launch",
     "launchpad",
     "viem",

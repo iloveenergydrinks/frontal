@@ -18,7 +18,7 @@ export {
   decodePlanUrl,
   encodePlanUrl,
 } from "./plan-url.js";
-export { canonicalJson, stringifyJson } from "./serialization.js";
+export { canonicalJson, hashCanonicalPlan, stringifyJson } from "./serialization.js";
 export { flapStandard, predictFlapStandardToken, type FlapStandardLaunchOptions } from "./flap.js";
 export { PONS_FACTORY, PONS_LOCKER, pons, type PonsLaunchOptions } from "./pons.js";
 export {
@@ -28,6 +28,33 @@ export {
   ponsV2,
   type PonsV2LaunchOptions,
 } from "./pons-v2.js";
+export {
+  PUMP_FUN_PROGRAM_ACCOUNT_HASH,
+  PUMP_FUN_PROGRAM_DATA,
+  PUMP_FUN_PROGRAM_DATA_HASH,
+  PUMP_FUN_PROGRAM_DEPLOYMENT_SLOT,
+  PUMP_FUN_PROGRAM_ID,
+  PUMP_FUN_PROGRAM_OWNER,
+  PUMP_FUN_PROGRAM_UPGRADE_AUTHORITY,
+  PUMP_FUN_SDK_VERSION,
+  PUMP_FUN_TOKEN_DECIMALS,
+  PUMP_FUN_TOKEN_SUPPLY,
+  buildPumpFunTransaction,
+  parsePumpFunLaunchPlan,
+  preparePumpFunLaunch,
+  pumpFun,
+  sendPumpFunLaunch,
+  simulatePumpFunLaunch,
+  verifyPumpFunLaunch,
+  type PumpFunAdapter,
+  type PumpFunLaunchOptions,
+  type PumpFunLaunchPlan,
+  type PumpFunPrepareParameters,
+  type PumpFunResult,
+  type PumpFunSimulation,
+  type PumpFunWallet,
+  type SerializedSolanaInstruction,
+} from "./pump-fun.js";
 export type {
   AdapterId,
   FundingRequirement,

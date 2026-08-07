@@ -1,20 +1,23 @@
 # Nexus
 
-Nexus is an agent-friendly TypeScript library and terminal CLI for guarded token launches on EVM chains. Version 0.3.1 supports:
+Nexus is an agent-friendly TypeScript library and terminal CLI for guarded token launches on EVM chains and Pump.fun on Solana. Version 0.4.0 supports:
 
 - Flap Standard on BNB Smart Chain (`56`).
 - Pons V1 fixed-liquidity launches on Robinhood Chain (`4663`).
 - Pons V2 bonding-curve launches on Robinhood Chain (`4663`).
+- Pump.fun `create_v2` launches on Solana mainnet-beta.
 
 It prepares a content-addressed launch plan before opening a wallet, rebuilds that plan from live protocol state before every simulation and send, estimates exact funding, and verifies the resulting receipt and protocol event. Nexus never accepts or stores a seed phrase or private key.
 
-> Token launches are permanent and can lose all value. Nexus is not an audit of Flap or Pons. Each protocol remains externally controlled and may change or upgrade.
+> Token launches are permanent and can lose all value. Nexus is not an audit of Flap, Pons, or Pump.fun. Each protocol remains externally controlled and may change or upgrade.
 
 ## Status
 
-This repository is the `0.3.1` source for `nexus-launch` and installs the executables `nexus`, `nexus-launch`, and `nexus-mcp`.
+This repository is the `0.4.0` source for `nexus-launch` and installs the executables `nexus`, `nexus-launch`, and `nexus-mcp`.
 
-All three adapters pass full disposable-fork execution and post-launch verification. Those tests never broadcast to production networks.
+All three EVM adapters pass full disposable-fork execution and post-launch verification. Pump has signer-free identity, instruction, plan, simulation, and verification coverage; tests never broadcast to production networks.
+
+Known upstream dependency risk as of 2026-08-07: the latest official Pump SDK (`1.36.0`) depends on the latest Solana Web3 1.x/SPL stack, whose transitive `bigint-buffer` and `uuid` versions produce npm audit advisories. Nexus does not call the affected variable-buffer UUID APIs, and SPL's bigint layouts use fixed-width protocol fields, but the advisories are not resolved upstream. `npm audit --omit=dev` therefore does not currently pass for the Pump-enabled dependency graph; integrators must include this in their release risk decision rather than treating Nexus as audited.
 
 `pons` preserves Pons V1 at factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB`. `pons-v2` separately targets the current Pons V2 stack at factory `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e`. Saved V1 plans are never silently reinterpreted as V2 plans.
 
@@ -51,6 +54,7 @@ Nexus reads RPC and WalletConnect configuration from the environment. Never put 
 ```bash
 export NEXUS_BNB_RPC_URL='https://your-bnb-rpc.example'
 export NEXUS_RH_RPC_URL='https://your-robinhood-rpc.example'
+export NEXUS_SOLANA_RPC_URL='https://your-solana-rpc.example'
 export NEXUS_WALLETCONNECT_PROJECT_ID='your-walletconnect-project-id'
 ```
 
@@ -138,7 +142,23 @@ nexus --json launch prepare \
   --out ./pons-v2-plan.json
 ```
 
-Both Pons adapters store the profile onchain, so `--image` accepts the exact URI the protocol should record. Nexus rejects nonzero `--initial-buy` on every current adapter: Flap and Pons V1 expose no minimum-output protection, and Pons V2 launch-and-buy will remain disabled until Nexus binds a separately quoted nonzero minimum output into the plan.
+Pump.fun:
+
+```bash
+nexus --json launch prepare \
+  --adapter pump-fun \
+  --account YourSolanaPayerPublicKey \
+  --creator YourSolanaCreatorPublicKey \
+  --mint EphemeralMintPublicKey \
+  --name 'Example' \
+  --symbol EXAMPLE \
+  --metadata-uri ipfs://bafy.../metadata.json \
+  --out ./pump-plan.json
+```
+
+Generate the mint keypair inside the calling application and keep it in memory. Only its public key belongs in the command and saved plan. Nexus uses the official `@pump-fun/pump-sdk` `create_v2` instruction, binds the current upgradeable-program identity and complete Pump global-state snapshot, and rejects a nonzero initial buy.
+
+Both Pons adapters store the profile onchain, so `--image` accepts the exact URI the protocol should record. Pump commits an external metadata JSON URI; Nexus does not upload to Pump's private frontend endpoint. Nexus rejects nonzero `--initial-buy` on every current adapter until it can bind and revalidate a nonzero minimum output.
 
 Preparation is signer-free and cannot broadcast. Existing files are not overwritten unless `--force` is explicit. Plans are written with mode `0600`.
 
@@ -186,6 +206,8 @@ Execution:
 4. Opens WalletConnect and requires the exact planned account on the exact chain.
 5. Broadcasts once, waits for a receipt, and verifies sender, target, calldata, value, block, canonical protocol event, and deployed code.
 
+`launch serve`, `launch execute`, and `launch link` are EVM-only. A Pump launch additionally needs the ephemeral mint signer, so applications execute it with `sendPumpFunLaunch`; neither the hosted page nor an MCP tool asks for that secret.
+
 Nexus never retries after a possible broadcast. If submission or verification becomes ambiguous, it returns `broadcast:true` and the known transaction hash when available. Reconcile that hash and sender nonce before doing anything else.
 
 Receipt verification is pinned to the canonical receipt block. Some public BNB RPCs prune historical contract state; when that is the only unavailable check, Flap verification additionally pins a current block, verifies the exact immutable minimal-proxy runtime and token metadata there, rechecks that block hash, and returns `stateVerification.mode: "current-fallback"`. Use an archive-capable RPC when receipt-block state verification is required.
@@ -226,7 +248,8 @@ Nexus ships an MCP server so an agent can drive the same workflow natively. Regi
       "args": ["-y", "-p", "nexus-launch", "nexus-mcp"],
       "env": {
         "NEXUS_BNB_RPC_URL": "https://your-bnb-rpc.example",
-        "NEXUS_RH_RPC_URL": "https://your-robinhood-rpc.example"
+        "NEXUS_RH_RPC_URL": "https://your-robinhood-rpc.example",
+        "NEXUS_SOLANA_RPC_URL": "https://your-solana-rpc.example"
       }
     }
   }
@@ -272,6 +295,32 @@ Node-only Flap metadata upload:
 
 ```ts
 import { uploadFlapMetadata } from "nexus-launch/flap-metadata";
+```
+
+Pump.fun uses a separate Solana adapter because its signer and transaction model are not EVM-compatible:
+
+```ts
+import { Connection, Keypair } from "@solana/web3.js";
+import { pumpFun, sendPumpFunLaunch } from "nexus-launch/pump-fun";
+
+const connection = new Connection(process.env.SOLANA_RPC_URL!, "confirmed");
+const mintSigner = Keypair.generate(); // Keep this object in memory.
+const adapter = pumpFun();
+const plan = await adapter.prepare({
+  connection,
+  payer: wallet.publicKey.toBase58(),
+  creator: wallet.publicKey.toBase58(),
+  token: { name: "Example", symbol: "EXAMPLE" },
+  launch: {
+    mint: mintSigner.publicKey.toBase58(),
+    metadataUri: "ipfs://bafy.../metadata.json",
+  },
+});
+
+await adapter.simulate(connection, plan);
+// Render plan.id, summary, and warnings and obtain explicit approval here.
+const signature = await sendPumpFunLaunch({ connection, plan, wallet, mintSigner });
+const result = await adapter.verify(connection, plan, signature);
 ```
 
 ## Protocol behavior
