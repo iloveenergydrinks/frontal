@@ -176,7 +176,7 @@ The plan rides in the URL fragment, so it is never sent to that page's server an
 
 The signing page must still display the decoded plan ID so the human can compare it with the one they approved, and must still revalidate against live chain state before opening a wallet. Plans compress to roughly 3 KB of URL.
 
-The page that consumes these links lives in `page/`. It is static: it decodes the fragment, checks the plan against its own content hash, rebuilds the plan from live chain state and simulates it, and only then enables a wallet. Build it with `npm run build:page` and host `page-dist/` anywhere — it has no backend to compromise.
+The page that consumes these links lives in `page/` and runs at <https://nexus-signing-page-production.up.railway.app>. It decodes the fragment, checks the plan against its own content hash, rebuilds the plan from live chain state and simulates it, and only then enables a wallet. `npm run build:page` produces `page-dist/`; `npm run start:page` serves it under a content-security policy that allows only its own script and the two chain RPCs.
 
 ### 7. Verify an existing transaction
 
